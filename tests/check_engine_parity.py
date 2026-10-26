@@ -1,0 +1,395 @@
+"""
+Checks that the in-browser engine (templates/engine.js) gives the same
+numbers as the Python modules the Streamlit app uses. Needs Node.js on PATH.
+
+    python tests/check_engine_parity.py
+
+Run it after changing a formula in calculations.py, shocks.py or
+narrative.py (config.py values flow into the engine automatically).
+"""
+
+import json
+import math
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+import calculations  # noqa: E402
+import config  # noqa: E402
+import data_loader  # noqa: E402
+import narrative  # noqa: E402
+import report  # noqa: E402
+import shocks  # noqa: E402
+from utils import summary  # noqa: E402
+from utils.portfolio import latest_per_entity  # noqa: E402
+
+NODE_RUNNER = r"""
+const fs = require("fs");
+const inp = JSON.parse(fs.readFileSync(0, "utf8"));
+const CASH_KEYS = inp.cash_keys;
+const E = require(inp.engine).create(inp.config);
+const NUM = new Set(inp.config.ALL_NUMERIC_COLUMNS);
+const rows = inp.rows.map(r => { const o = {}; for (const k in r) o[k] = NUM.has(k) ? (r[k] === null ? NaN : r[k]) : r[k]; return o; });
+const en = E.enrich(rows);
+const latest = E.latestPerEntity(en).sort((a, b) => b.Z_EM - a.Z_EM);
+const out = { rows: en.map(r => { const o = {}; for (const k of inp.keys) o[k] = r[k]; return o; }) };
+out.narr = Object.fromEntries(latest.map(r => [r.Entity, E.singleNarrative(r)]));
+out.cross = E.crossNarrative(latest).paragraph;
+out.zones = E.zoneSummary(latest);
+out.trend = Object.fromEntries(latest.map(r => [r.Entity, E.zTrendSummary(en.filter(x => x.Entity === r.Entity), r.Entity)]));
+out.vol = Object.fromEntries(latest.map(r => [r.Entity, E.revenueVolatility(en, r.Entity)]));
+out.notch = Object.fromEntries(latest.map(r => [r.Entity, E.notchChange(en, r.Entity)]));
+out.paths = {};
+for (const [name, p] of Object.entries(inp.scenarios)) {
+  out.paths[name] = {};
+  for (const r of latest) {
+    const pp = Object.assign({}, p, { fuel_cost_share: inp.config.SECTOR_FUEL_COST_SHARE[r.Sector] ?? inp.config.SECTOR_FUEL_COST_SHARE.Other });
+    const v = E.revenueVolatility(en, r.Entity);
+    pp.revenue_shock_pct = pp.revenue_shock_std_devs * (Number.isFinite(v) ? v : (inp.config.SECTOR_REVENUE_VOLATILITY[r.Sector] ?? 0.15));
+    const path = E.costPath(E.runScenario(r, pp, inp.H), 70, null, pp.ead_share ?? 1, pp);
+    out.paths[name][r.Entity] = { z: path.map(x => x.Z_EM), efc: path.map(x => x.EFC), rating: path.map(x => x.Rating), pd: path.map(x => x.PD), sub: path.map(x => x["Direct Fuel Subsidy"]), desc: E.describeShocks(pp), cash: path.map(x => CASH_KEYS.map(k => x[k])) };
+  }
+}
+out.gre = inp.gre.map(([ent, role, link, sov, outl]) => { const g = E.gre(en, ent, role, link, sov, outl); return [g.capped, g.uplifted, g.notches, g.gap]; });
+const base = latest.find(r => r.Entity === inp.mc.entity);
+const pp = Object.assign({}, inp.scenarios.combined, { fuel_cost_share: 0.25, revenue_shock_pct: 0 });
+const mcStats = (sims) => { const fin = sims.map(s => s.path[s.path.length - 1]); return { p50: E.quantile(fin.map(x => x.EFC), 0.5), p95: E.quantile(fin.map(x => x.EFC), 0.95), zp50: E.quantile(fin.map(x => x.Z_EM), 0.5), distress: fin.filter(x => x.Zone === "Distress").length / fin.length }; };
+out.mc = mcStats(E.monteCarlo(base, pp, { n: inp.mc.n, fuelSd: 0.10, fxSd: 0.08, rho: 0.30, H: inp.H, lgd: 70, gdp: null }));
+const pp4 = Object.assign({}, pp, { revenue_shock_std_devs: -1.0, revenue_sigma: 0.12, revenue_shock_pct: -0.12 });
+const sims4 = E.monteCarlo(base, pp4, { n: inp.mc.n4, fuelSd: 0.10, fxSd: 0.08, rho: 0.30, rateSd: 150, revSd: 0.8, correlations: inp.mc.corr, H: inp.H, lgd: 70, gdp: null, eadShare: 0.8 });
+out.mc4 = mcStats(sims4);
+{ // fuel price path: draws centred on the path peak, the whole path rescaled per draw
+  const simsP = E.monteCarlo(base, Object.assign({}, pp, inp.mc.path), { n: inp.mc.n, fuelSd: 0.10, fxSd: 0.08, rho: 0.30, H: inp.H, lgd: 70, gdp: null });
+  const fc = (s, t) => s.path[t]["Fuel Cost Change"];
+  out.mcPath = Object.assign(mcStats(simsP), { mu: simsP.reduce((a, s) => a + s.fuel, 0) / simsP.length,
+    shape: simsP.every((s) => fc(s, 1) === 0 && Math.abs(fc(s, 3) - 0.5 * fc(s, 2)) <= 1e-9 * Math.max(1, Math.abs(fc(s, 2)))) });
+}
+{ // sample moments of the drawn shocks
+  const nm = sims4.names, X = nm.map(k => sims4.map(s => s.draw[k]));
+  const mu = X.map(a => a.reduce((s, v) => s + v, 0) / a.length);
+  const sd = X.map((a, i) => Math.sqrt(a.reduce((s, v) => s + (v - mu[i]) ** 2, 0) / (a.length - 1)));
+  const cor = {};
+  nm.forEach((a, i) => nm.forEach((b, j) => { if (j > i) cor[a + "|" + b] = X[i].reduce((s, v, k) => s + (v - mu[i]) * (X[j][k] - mu[j]), 0) / (X[i].length - 1) / sd[i] / sd[j]; }));
+  out.mom = { names: nm, mu, sd, cor };
+}
+out.psd = inp.psd.map(c => { try { E.mcFactor(["fuel", "fx", "rate"], { fuel: 0.1, fx: 0.1, rate: 100 }, c); return true; } catch (e) { return false; } });
+out.expo = Object.fromEntries(en.map(r => [r.Entity + "|" + r.Year, E.soeExposures(r)]));
+out.efcRows = en.map(r => { const a = E.efcRow(r, 65, 0.8, "guaranteed_debt"), b = E.efcRow(r, 65, 0.6); return [a.EAD, a.EFC, a.EAD_source, b.EAD, b.EFC, b.EAD_source]; });
+out.match = inp.labels.map(l => E.matchColumn(l));
+out.std = E.standardizeColumns(inp.headers).report;
+out.num = inp.cells.map(c => E.parseNumber(c));
+out.year = inp.cells.map(c => E.parseYear(c));
+out.delim = inp.texts.map(t => E.detectDelimiter(t));
+out.frames = inp.texts.map(t => { const f = E.frameFromRows(E.parseDelimited(t, E.detectDelimiter(t))); return [f.header, f.records.length, Object.keys(f.records[0] || {})]; });
+out.q = inp.qtest.map(q => E.quantile(inp.qvals, q));
+process.stdout.write(JSON.stringify(out, (k, v) => (typeof v === "number" && !Number.isFinite(v) ? null : v)));
+"""
+
+
+# The two generators use different random streams, so their medians differ by sampling noise. The 4-variable case
+# sits near the distress boundary (about half the draws), where the median of Z-EM is noisy: at 5,000 draws the
+# gap was 3.1% against the 3% tolerance after C3a, and 0.2% at 50,000. More draws, same tolerances.
+MC4_DRAWS = 20000
+
+CASH_KEYS = ["Net Income", "Current Liabilities", "Current Assets", "Total Assets", "State Compensation Receivable",
+             "State Compensation Paid", "Cash Funding Gap", "Interest on New Debt", "New Short-term Debt", "Supplier Arrears",
+             "Trapped VAT Credits", "Current Ratio", "Adjusted Current Ratio", "Debt to Assets", "Cash", "Cash Drawdown",
+             "Interest Saved", "Emergency Support", "Tariff Share of RMA", "Refinanced Debt", "Cumulative Emergency Support", "New Long-term Debt",
+             "Interest Expense", "Equity", "Unpaid Under Waterfall", "Underfunded Operations", "Reserve Draw", "Reserve Top-up",
+             "Arrears to IPPs", "Arrears to Fuel Suppliers", "Missed Debt Service", "Arrears on Own Operations", "Reserve Account",
+             "Debt Default", "State Shortfall Payment", "Late-payment Interest", "Waterfall Routed Share", "Tariff Gap Compensation Change",
+             "Customer Arrears Change", "Arrears on O&M Floor", "Arrears to Junior Creditors", "Arrears to Statutory and Operator",
+             "Customer Arrears", "Cumulative State Shortfall Payment", "X1"]
+
+
+def close(a, b, tol=1e-6):
+    if a is None or b is None or (isinstance(a, float) and math.isnan(a)) or (isinstance(b, float) and math.isnan(b)):
+        na = a is None or (isinstance(a, float) and math.isnan(a))
+        nb = b is None or (isinstance(b, float) and math.isnan(b))
+        return na and nb
+    if isinstance(a, str) or isinstance(b, str):
+        return a == b
+    return abs(a - b) <= tol * max(1.0, abs(a), abs(b))
+
+
+def main():
+    node = shutil.which("node")
+    if not node:
+        print("Node.js not found — skipping the engine parity check.")
+        return 0
+    raw = data_loader.demo_portfolio()
+    # a partial cash column, so cash-first financing runs for some SOEs and stays inert for the others
+    raw["Cash and Equivalents"] = np.where(raw["Entity"].isin(["SOE A", "SOE C", "SOE D", "SOE G", "SOE H"]),
+                                           0.25 * raw["Current Assets"].astype(float), np.nan)
+    # short-term bank debt for some SOEs (with and without cash), so refinancing uses reported debt for them and the proxy for the rest
+    raw["Short Term Debt"] = np.where(raw["Entity"].isin(["SOE A", "SOE B", "SOE F"]), 0.3 * raw["Current Liabilities"].astype(float), np.nan)
+    H = 3
+    zero = dict(config.DEFAULT_SHOCK_PARAMS, **{k: 0.0 for k in ["fuel_shock_pct", "fx_shock_pct", "rate_shock_bps", "revenue_shock_std_devs", "refinancing_spread_bps", "arrears_pct_of_revenue"]})
+    custom = dict(config.DEFAULT_SHOCK_PARAMS, fuel_shock_pct=-0.2, fx_shock_pct=0.45, rate_shock_bps=-150, revenue_shock_std_devs=1.5,
+                  refinancing_spread_bps=600, arrears_pct_of_revenue=-0.1, shock_duration_years=3, tariff_passthrough=0.2)
+    subsidy = dict(custom, fuel_shock_pct=0.4, fuel_subsidy_share=0.3, tariff_passthrough=0.5, ead_share=0.6)
+    overfull = dict(custom, fuel_shock_pct=0.3, fuel_subsidy_share=0.8, tariff_passthrough=0.5)
+    # cash channel: delayed State compensation, short-term funding, interest, tariff policy, VAT, legacy asset rule
+    oil = dict(config.DEFAULT_SHOCK_PARAMS, **config.DEFAULT_CASH_SETTINGS)
+    oil.update({k: v for k, v in config.OIL_SHOCK_PRESET.items() if k != "fuel_cost_share"})
+    oil_policy = dict(oil, tariff_increase_pct=0.10, comp_provision_share=0.4, cash_gap_payables_share=0.3, vat_trapped_share=0.5,
+                      comp_backlog_collected=0.6, cash_gap_short_term_share=0.7)
+    overshoot = dict(oil, tariff_increase_pct=0.30, fuel_shock_pct=0.10, fuel_shock_path=[])
+    cheap_fuel = dict(oil, fuel_shock_pct=-0.30, fuel_shock_path=[])
+    legacy = dict(custom, legacy_loss_assets=True)
+    # fuel price path, oil linkage, tariff base, cash-first financing
+    path_step = dict(subsidy, tariff_increase_pct=0.05, fuel_shock_path=[0.0, 0.4, 0.2])
+    path_neg = dict(oil, tariff_increase_pct=0.10, fuel_shock_path=[-0.3, 0.0, 0.15])
+    linkage = dict(oil, fuel_oil_linkage=0.6)
+    tariff_exg = dict(subsidy, tariff_increase_pct=0.15, tariff_revenue_base="revenue_ex_grants")
+    cash_floor = dict(oil, cash_floor_opex_share=0.05)
+    cash_half = dict(custom, cash_buffer_share=0.5)
+    cash_off = dict(oil, cash_buffer_share=0.0)
+    # cash waterfall (priority of payments), refinancing, borrowing cap (emergency support)
+    waterfall = dict(oil, waterfall_on=1.0)
+    waterfall_reserve = dict(oil_policy, waterfall_on=1.0, reserve_months=3, ipp_cost_share=0.2, refinancing_spread_bps=300, comp_paid_share=0.3)
+    waterfall_stress = dict(oil, waterfall_on=1.0, comp_paid_share=0.0, comp_backlog_collected=0.2, reserve_months=6, ipp_cost_share=0.25)
+    waterfall_custom = dict(custom, **dict(config.DEFAULT_CASH_SETTINGS, waterfall_on=1.0, ipp_cost_share=0.3))
+    refinance = dict(oil_policy, refinance_share=0.5, short_term_debt_rate=0.085, refinance_long_term_rate=0.03, refinancing_spread_bps=300)
+    waterfall_refi = dict(oil, waterfall_on=1.0, refinance_share=1.0, reserve_months=2)
+    cap = dict(oil, borrowing_cap_debt_to_assets=0.55, comp_paid_share=0.2)
+    cap_waterfall = dict(cap, waterfall_on=1.0, fx_shock_pct=0.3)
+    waterfall_legacy = dict(legacy, waterfall_on=1.0, refinance_share=1.0)
+    # waterfall v2: country orders, shortfall rules, compliance and ramp-up, late interest, baseline drivers, PD methods
+    wf2 = dict(oil, waterfall_on=1.0, comp_paid_share=0.2, ipp_cost_share=0.2, statutory_cost_share=0.03, om_floor_share=0.4,
+               junior_share=0.2, reserve_months=2, late_rate_priority=0.12, late_rate_debt=0.15, late_rate_other=0.05)
+    v2 = {
+        "wf_pari": dict(wf2, waterfall_order="pari_passu"),
+        "wf_fuel_first": dict(wf2, waterfall_order="fuel_first", shortfall_rule="junior"),
+        "wf_ghana": dict(wf2, waterfall_order="ghana", shortfall_rule="pro_rata", waterfall_compliance=0.6, waterfall_rampup_months=18),
+        "wf_civ_state": dict(wf2, waterfall_order="cote_divoire", shortfall_rule="state", waterfall_coverage=0.8, waterfall_start_year=2),
+        "wf_custom_ranks": dict(wf2, waterfall_order="custom", rank_debt=0, rank_om_floor=1, rank_ipp=2, rank_fuel=2, rank_reserve=3, rank_residual=4),
+        "wf_behaviour": dict(wf2, priority_discount=0.05, state_paid_uplift=0.5, default_on_missed_debt=0.0, pd_method="rating_tail"),
+        "baseline_drivers": dict(oil, cost_recovery_ratio=0.85, tariff_gap_state_share=0.5, receivable_current_share=0.3,
+                                 collect_households=0.9, collect_public=0.6, demand_growth=0.04, losses_change=0.02,
+                                 tariff_revenue_base="revenue_ex_grants", tariff_increase_pct=0.05),
+        "crr_full": dict(wf2, cost_recovery_ratio=1.1, pd_method="logistic"),
+        "refi_rating": dict(oil_policy, refinance_share=0.6, refinance_start_year=2, refinance_min_rating="CCC", pd_method="user", pd_user=0.07),
+        "pd_default40": dict(wf2, comp_paid_share=0.0, pd_on_default=0.4, pd_method="rating_tail", pd_logit_b=-0.8),
+    }
+    scenarios = {"zero": zero, "combined": dict(config.DEFAULT_SHOCK_PARAMS), "custom": custom, "subsidy": subsidy, "overfull": overfull,
+                 "oil": oil, "oil_policy": oil_policy, "overshoot": overshoot, "cheap_fuel": cheap_fuel, "legacy": legacy,
+                 "path_step": path_step, "path_neg": path_neg, "linkage": linkage, "tariff_exg": tariff_exg,
+                 "cash_floor": cash_floor, "cash_half": cash_half, "cash_off": cash_off,
+                 "waterfall": waterfall, "waterfall_reserve": waterfall_reserve, "waterfall_stress": waterfall_stress,
+                 "waterfall_custom": waterfall_custom, "refinance": refinance, "waterfall_refi": waterfall_refi, "cap": cap,
+                 "cap_waterfall": cap_waterfall, "waterfall_legacy": waterfall_legacy, **v2}
+    mc_corr = {"fuel|fx": 0.3, "fuel|rate": 0.2, "fx|rate": 0.4, "fuel|revenue": -0.3, "fx|revenue": -0.2, "rate|revenue": 0.0}
+    psd_cases = [{"fuel|fx": 0.3}, {"fuel|fx": 0.9, "fuel|rate": 0.9, "fx|rate": -0.9}, {"fuel|fx": 1.0, "fuel|rate": 1.0, "fx|rate": 1.0},
+                 {"fuel|fx": 0.5, "fuel|rate": -0.5, "fx|rate": 0.5}, {"fuel|fx": -0.8, "fuel|rate": -0.8, "fx|rate": -0.8}]
+    labels = ["Entity", "entity_name", "Company", "Operating Costs", "Operating Profit", "Finance costs", "Total Liabilites", "Retaind Earnings",
+              "Net income (loss)", "Revenue & other income", "EBITDA", "ebit", "Year", "fiscal year", "Govt grants", "Cash & cash equivalents",
+              "Guaranteed debt", "Fuel costs", "Short-term borrowings", "fx_debt", "source_file", "audit_status", "Data quality flag",
+              "Something else entirely", "Totl Assets", "Curent Liabilities", "Deprecation", "Sector ", "  UNITS", "Profit after tax", "NPAT"]
+    headers = ["Entity", "Year", "Sector", "Revenue", "Revenues", "Net Income", "NPAT", "Profit after tax", "Totl Assets", "Total Assets", "Mystery"]
+    cells = ["1,234,567", "(1,234)", "35%", "1234,5", "1 234", "1'234", "\u22125", "-", "n/a", "N/A", "12abc", "0x10", "1_000", "1e3", " 42 ",
+             7, 3.5, None, "(12.5%)", "1,23", "+.5", "", "...", "FY2023", "2023/24", 2023.0, "2023", "1,234.56", "-0", "12.", "(3)", "5 %", "1.2.3"]
+    texts = ["Entity;Year;Sector;Revenues;Total Assets\nSOE A;2020;Energy;1234,5;99\nSOE B;2021;Transport;10;20\n",
+             "Ministry of Finance\nSource: annual reports\n\nEntity,Year,Sector,Revenues,Total Assets\nSOE A,2020,Energy,\"1,234\",99\n",
+             "entity\tfiscal_year\tsector\trevenue\ttotal_assets\nSOE A\t2020\tEnergy\t5\t6\n",
+             "a,b\n1,2\n"]
+    keys = ["Entity", "Year", "X1", "X2", "X3", "X4", "Z_EM", "Zone", "Rating"] + list(config.KPI_THRESHOLDS)
+    gre_cases = [(e, r, l, s, o) for e in ["SOE A", "SOE C", "SOE F", "SOE H"] for r, l in [("Critical", "Integral"), ("Important", "Strong"), ("Limited Importance", "Limited")]
+                 for s, o in [("BB", "Stable"), ("BBB", "Negative"), ("B", "Positive")]]
+    qvals = [3.1, -2.0, 7.5, 0.4, 0.4, 9.9, -5.5]
+    qtest = [0.05, 0.25, 0.5, 0.75, 0.95]
+    payload = {
+        "engine": str(ROOT / "templates" / "engine.js"), "config": report.config_payload(), "rows": report.rows_payload(raw),
+        "keys": keys, "scenarios": scenarios, "cash_keys": CASH_KEYS, "H": H, "gre": gre_cases,
+        "mc": {"entity": "SOE F", "n": 5000, "n4": MC4_DRAWS, "corr": mc_corr, "path": {"fuel_shock_path": [0.0, 0.6, 0.3]}},
+        "qvals": qvals, "qtest": qtest, "psd": psd_cases, "labels": labels, "headers": headers, "cells": cells, "texts": texts,
+    }
+    res = subprocess.run([node, "-e", NODE_RUNNER], input=json.dumps(payload), capture_output=True, text=True, check=True)
+    js = json.loads(res.stdout)
+
+    fails = []
+    # Python reference
+    df = calculations.compute_kpis(calculations.compute_zem_components(data_loader.coerce_numeric(raw)))
+    n_extra = 0
+    for i, (_, r) in enumerate(df.iterrows()):
+        for k in keys:
+            a, b = r[k], js["rows"][i][k]
+            a = None if (isinstance(a, float) and math.isnan(a)) else (int(a) if k == "Year" else a)
+            if not close(a, b, 1e-9):
+                fails.append(f"row {i} {r['Entity']} {r['Year']} {k}: py={a} js={b}")
+    latest = latest_per_entity(df).sort_values("Z_EM", ascending=False)
+    for _, r in latest.iterrows():
+        e = r["Entity"]
+        if narrative.single_soe_narrative(r) != js["narr"][e]:
+            fails.append(f"narrative {e}:\n  py={narrative.single_soe_narrative(r)}\n  js={js['narr'][e]}")
+        t = summary.summarize_z_trend(df[df["Entity"] == e], e)
+        if t != js["trend"][e]:
+            fails.append(f"trend {e}: py={t} js={js['trend'][e]}")
+        if not close(calculations.historical_revenue_volatility(df, e), js["vol"][e], 1e-9):
+            fails.append(f"vol {e}")
+        if list(calculations.rating_notch_change(df, e)) != js["notch"][e]:
+            fails.append(f"notch {e}: {calculations.rating_notch_change(df, e)} vs {js['notch'][e]}")
+    if narrative.cross_soe_narrative(latest)["paragraph"] != js["cross"]:
+        fails.append(f"cross narrative:\n  py={narrative.cross_soe_narrative(latest)['paragraph']}\n  js={js['cross']}")
+    if summary.summarize_zone_distribution(latest) != js["zones"]:
+        fails.append(f"zone summary: py={summary.summarize_zone_distribution(latest)} js={js['zones']}")
+    for name, p in scenarios.items():
+        for _, r in latest.iterrows():
+            pp = dict(p, fuel_cost_share=config.SECTOR_FUEL_COST_SHARE.get(r["Sector"], config.SECTOR_FUEL_COST_SHARE["Other"]))
+            v = calculations.historical_revenue_volatility(df, r["Entity"])
+            v = v if v == v else config.SECTOR_REVENUE_VOLATILITY.get(r["Sector"], 0.15)
+            pp["revenue_shock_pct"] = pp["revenue_shock_std_devs"] * v
+            path = shocks.run_scenario(r, pp, H)
+            path = shocks.add_cost(path, 70, pp.get("ead_share", 1.0), pp)
+            j = js["paths"][name][r["Entity"]]
+            for t in range(H + 1):
+                if not close(path["Z_EM"].iloc[t], j["z"][t], 1e-9) or not close(path["EFC"].iloc[t], j["efc"][t], 1e-9) or path["Rating"].iloc[t] != j["rating"][t]:
+                    fails.append(f"path {name} {r['Entity']} t={t}: py={path['Z_EM'].iloc[t]:.6f}/{path['Rating'].iloc[t]} js={j['z'][t]}/{j['rating'][t]}")
+                if not close(path["PD"].iloc[t], j["pd"][t], 1e-12):
+                    fails.append(f"pd {name} {r['Entity']} t={t}: py={path['PD'].iloc[t]} js={j['pd'][t]}")
+                if not close(path["Direct Fuel Subsidy"].iloc[t], j["sub"][t], 1e-9):
+                    fails.append(f"fuel subsidy {name} {r['Entity']} t={t}: py={path['Direct Fuel Subsidy'].iloc[t]} js={j['sub'][t]}")
+                for k, jv in zip(CASH_KEYS, j["cash"][t]):
+                    pv = path[k].iloc[t]
+                    if not close(None if pv != pv else float(pv), jv, 1e-9):
+                        fails.append(f"cash channel {name} {r['Entity']} t={t} {k}: py={pv} js={jv}")
+                n_extra += len(CASH_KEYS)
+            if shocks.describe_active_shocks(pp) != j["desc"]:
+                fails.append(f"describe {name}: py={shocks.describe_active_shocks(pp)} js={j['desc']}")
+    # GRE — replicate strategic_soe.py logic in Python for the same cases
+    for (e, role, link, sov, outl), (jt, ju, jn, jg) in zip(gre_cases, js["gre"]):
+        d = df[df["Entity"] == e].sort_values("Year")
+        sacp = d.iloc[-1]["Rating"]; si = config.rating_index(sacp); vi = config.rating_index(sov)
+        tier = config.role_link_to_likelihood(role, link)
+        fr, lr, nc = calculations.rating_notch_change(df, e)
+        trig = (nc is not None and nc <= -config.DYNAMIC_CAP_TRIGGER_NOTCHES) or outl == "Negative"
+        order = config.LIKELIHOOD_TIERS_ASC
+        capped = config.DYNAMIC_CAP_TIER if trig and order.index(tier) > order.index(config.DYNAMIC_CAP_TIER) else tier
+        spec = config.LIKELIHOOD_UPLIFT[capped]; m, g = spec["max_notches"], spec["min_gap_to_sovereign"]
+        if si is None or vi is None or m == 0:
+            ui = si
+        else:
+            ceil = vi - (g or 0); target = si + m if m is not None else ceil; ui = max(si, min(target, ceil))
+        exp = [capped, config.RATING_SCALE_ASC[ui], ui - si, vi - ui]
+        if exp != [jt, ju, jn, jg]:
+            fails.append(f"GRE {e} {role}/{link} {sov} {outl}: py={exp} js={[jt, ju, jn, jg]}")
+    # quantile definition
+    for q, jv in zip(qtest, js["q"]):
+        if not close(float(np.quantile(qvals, q)), jv, 1e-12):
+            fails.append(f"quantile {q}")
+    # Monte Carlo: different random generators, so compare distributions (5,000 draws)
+    base = latest[latest["Entity"] == "SOE F"].iloc[0]
+    pp = dict(config.DEFAULT_SHOCK_PARAMS, fuel_cost_share=0.25, revenue_shock_pct=0.0)
+    mc = shocks.run_monte_carlo(base, pp, n_sims=5000, fuel_std=0.10, fx_std=0.08, correlation=0.30, horizon_years=H, lgd_pct=70)
+    fin = mc[mc["Projection Year"] == H]
+    py_mc = {"p50": fin["EFC"].quantile(0.5), "p95": fin["EFC"].quantile(0.95), "zp50": fin["Z_EM"].quantile(0.5), "distress": (fin["Zone"] == "Distress").mean()}
+    for k, v in py_mc.items():
+        rel = abs(v - js["mc"][k]) / max(abs(v), 1e-9)
+        tol = 0.03 if k != "distress" else 0.05
+        if rel > tol and abs(v - js["mc"][k]) > 0.01:
+            fails.append(f"MC {k}: py={v:.6g} js={js['mc'][k]:.6g} (rel {rel:.3f})")
+    print("Monte Carlo (5,000 draws, SOE F, standard stress):", {k: (round(v, 4), round(js["mc"][k], 4)) for k, v in py_mc.items()})
+    # four-variable Monte Carlo (rate and revenue drawn, full correlation matrix, EAD 80%)
+    pp4 = dict(pp, revenue_shock_std_devs=-1.0, revenue_sigma=0.12, revenue_shock_pct=-0.12)
+    mc4 = shocks.run_monte_carlo(base, pp4, n_sims=MC4_DRAWS, fuel_std=0.10, fx_std=0.08, correlation=0.30, horizon_years=H, lgd_pct=70,
+                                 rate_std_bps=150, revenue_std_sd=0.8, correlations=mc_corr, ead_share=0.8)
+    fin4 = mc4[mc4["Projection Year"] == H]
+    py4 = {"p50": fin4["EFC"].quantile(0.5), "p95": fin4["EFC"].quantile(0.95), "zp50": fin4["Z_EM"].quantile(0.5), "distress": (fin4["Zone"] == "Distress").mean()}
+    # EFC percentiles jump between rating bands (PD is a step function of the rating), so when a percentile sits
+    # on a band boundary the two generators can land on neighbouring bands. Such a value still passes when it lies
+    # within the sampling band of the Python draws (±5 percentile points around the target percentile).
+    efc_band = {"p50": fin4["EFC"].quantile([0.45, 0.55]).tolist(), "p95": fin4["EFC"].quantile([0.90, 0.99]).tolist()}
+    for k, v in py4.items():
+        rel = abs(v - js["mc4"][k]) / max(abs(v), 1e-9)
+        in_band = k in efc_band and efc_band[k][0] <= js["mc4"][k] <= efc_band[k][1]
+        if rel > {"p50": 0.03, "p95": 0.06, "zp50": 0.03, "distress": 0.08}[k] and abs(v - js["mc4"][k]) > 0.01 and not in_band:
+            fails.append(f"MC4 {k}: py={v:.6g} js={js['mc4'][k]:.6g} (rel {rel:.3f})")
+    print("Monte Carlo, 4 variables:", {k: (round(v, 4), round(js["mc4"][k], 4)) for k, v in py4.items()})
+    # Monte Carlo with a fuel price path: centred on the peak, shape kept, same median Z-EM
+    mcp = shocks.run_monte_carlo(base, dict(pp, fuel_shock_path=[0.0, 0.6, 0.3]), n_sims=5000, fuel_std=0.10, fx_std=0.08, correlation=0.30,
+                                 horizon_years=H, lgd_pct=70)
+    zp = mcp[mcp["Projection Year"] == H]["Z_EM"].quantile(0.5)
+    jp = js["mcPath"]
+    if abs(jp["mu"] - 0.6) > 4 * 0.10 / math.sqrt(5000):
+        fails.append(f"MC path: JS fuel draws centred on {jp['mu']:.4f}, not the path peak 0.6")
+    if not jp["shape"]:
+        fails.append("MC path: JS draws do not keep the path shape")
+    if abs(zp - jp["zp50"]) / max(abs(zp), 1e-9) > 0.03 and abs(zp - jp["zp50"]) > 0.01:
+        fails.append(f"MC path zp50: py={zp:.6g} js={jp['zp50']:.6g}")
+    print("Monte Carlo with a fuel path, median final Z-EM:", (round(zp, 4), round(jp["zp50"], 4)))
+    mom = js["mom"]
+    target_mu = {"fuel": pp4["fuel_shock_pct"], "fx": pp4["fx_shock_pct"], "rate": pp4["rate_shock_bps"], "revenue": pp4["revenue_shock_std_devs"]}
+    target_sd = {"fuel": 0.10, "fx": 0.08, "rate": 150, "revenue": 0.8}
+    for i, nm in enumerate(mom["names"]):
+        if abs(mom["mu"][i] - target_mu[nm]) > 4 * target_sd[nm] / math.sqrt(5000) or abs(mom["sd"][i] / target_sd[nm] - 1) > 0.05:
+            fails.append(f"MC4 draws {nm}: mean {mom['mu'][i]:.4g} (target {target_mu[nm]}), sd {mom['sd'][i]:.4g} (target {target_sd[nm]})")
+    for pair, c in mom["cor"].items():
+        a, b = pair.split("|")
+        if abs(c - mc_corr.get(pair, mc_corr.get(f"{b}|{a}", 0.0))) > 0.05:
+            fails.append(f"MC4 draw correlation {pair}: {c:.3f} vs target {mc_corr.get(pair)}")
+    # correlation matrix consistency check
+    for c, jok in zip(psd_cases, js["psd"]):
+        try:
+            shocks.mc_covariance(["fuel", "fx", "rate"], {"fuel": 0.1, "fx": 0.1, "rate": 100}, c); pok = True
+        except ValueError:
+            pok = False
+        if pok != jok:
+            fails.append(f"PSD check {c}: py={pok} js={jok}")
+    # bottom-up exposures and EFC with EAD options
+    for _, r in df.iterrows():
+        pe = calculations.soe_exposures(r); je = js["expo"][f"{r['Entity']}|{int(r['Year'])}"]
+        for k, (v, src) in pe.items():
+            if not close(v, je[k][0], 1e-12) or src != je[k][1]:
+                fails.append(f"exposure {r['Entity']} {int(r['Year'])} {k}: py={(v, src)} js={je[k]}")
+        n_extra += len(pe)
+    ga = calculations.compute_efc(df, 65, ead_share=0.8, ead_basis="guaranteed_debt")
+    gb = calculations.compute_efc(df, 65, ead_share=0.6)
+    for i in range(len(df)):
+        exp = [ga["EAD"].iloc[i], ga["EFC"].iloc[i], ga["EAD_source"].iloc[i], gb["EAD"].iloc[i], gb["EFC"].iloc[i], gb["EAD_source"].iloc[i]]
+        for a, b in zip(exp, js["efcRows"][i]):
+            if not close(a if isinstance(a, str) else float(a), b, 1e-12):
+                fails.append(f"EFC/EAD row {i}: py={exp} js={js['efcRows'][i]}"); break
+        n_extra += 6
+    # column matching (schema.py)
+    import pandas as pd
+    import schema
+    for lab, jm in zip(labels, js["match"]):
+        pm = list(schema.match_column(lab))
+        if pm[0] != jm[0] or pm[1] != jm[1] or not close(pm[2], jm[2], 1e-9):
+            fails.append(f"match {lab!r}: py={pm} js={jm}")
+    _, rep_df = schema.standardize_columns(pd.DataFrame(columns=headers))
+    if rep_df.to_dict("records") != js["std"]:
+        fails.append(f"standardize_columns:\n  py={rep_df.to_dict('records')}\n  js={js['std']}")
+    n_extra += len(labels) + 1 + len(psd_cases) + 4
+    # reading uploads: number and year parsing, delimiter and header-row detection
+    import csv, io
+    for c, jn, jy in zip(cells, js["num"], js["year"]):
+        pn, py = data_loader.parse_number(c), data_loader.parse_year(c)
+        if not close(None if pn != pn else pn, jn, 1e-15) or not close(None if py != py else py, jy, 1e-15):
+            fails.append(f"parse {c!r}: py=({pn}, {py}) js=({jn}, {jy})")
+    for t, jd, jf in zip(texts, js["delim"], js["frames"]):
+        d = data_loader.detect_delimiter(t)
+        rows = list(csv.reader(io.StringIO(t), delimiter=d))
+        fr = data_loader.frame_from_rows(rows)
+        exp = [schema.find_header_row(rows), len(fr), list(fr.columns)]
+        if d != jd or exp != jf:
+            fails.append(f"upload text {t[:30]!r}: py=({d!r}, {exp}) js=({jd!r}, {jf})")
+    n_extra += 2 * len(cells) + 2 * len(texts)
+
+    n_checks = len(js["rows"]) * len(keys) + len(latest) * (5 + len(scenarios) * (2 * H + 3)) + len(gre_cases) + len(qtest) + 6 + 3 + n_extra
+    if fails:
+        print(f"{len(fails)} mismatches:")
+        print("\n".join(fails[:40]))
+        return 1
+    print(f"OK — JS engine matches Python on {n_checks} checks.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
