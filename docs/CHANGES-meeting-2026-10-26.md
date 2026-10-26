@@ -42,13 +42,29 @@ Rebuild: `python report.py --demo --allow-download --out SOE-Fiscal-Risk-Final.h
 
 ## 2. The How it works tab
 
-Adapted from the draft explainer *How SOE Pilot Works* (`How_SOE_Pilot_Works.html`), but native to the tool and computed live from whatever data is loaded:
+Adapted from the draft explainer *How SOE Pilot Works* (`How_SOE_Pilot_Works.html`): the same look (transit-line rail, sticky picture, step cards on the right, Overpass and Atkinson Hyperlegible type, the same health / risk / shock colours) and the same scroll-driven effects, but native to the tool and computed live from whatever data is loaded. Every number is for one **example SOE** (picked in the opening section; any SOE in the data can be chosen) or for the loaded portfolio.
 
-- **A · The chain in six stops** — Accounts → Health checks → Score → Rating → Chance of distress → Expected cost, as a clickable line with back/next. Each stop has a picture (what the SOE owns and owes; the four checks; the score line with zones and the other SOEs; the 20-step rating ladder; 1,000 dots for the chance of distress; EAD × LGD × PD as nested blocks) and plain text with the example SOE's numbers. The example SOE can be changed.
-- **B · Shock transmission** — pick fuel, exchange rate, interest rates, revenue, arrears or the standard stress. A map of the accounts (income statement → profit and cash → balance sheet → health checks → result) highlights what the shock hits first and what it moves next, with the example SOE's changes in each box ("no change by 2027" where a box is not moved for that SOE). Then the steps in words, the expected-cost path with and without the shock, what to take away (including "shocks make each other worse": one at a time vs all together), the SOEs in the data this shock hits hardest, and a button that opens the same shock in Shock Scenarios.
-- **C · Many possible futures** (Monte Carlo, P50/P95 in plain words), **D · Which number am I looking at?** (the four expected costs the same SOE shows in the tool, and why they differ), **E · The whole chain in six lines**, what the tool is not, and a searchable glossary (35 terms, `config.HOW_GLOSSARY`).
+How it reads: the reader scrolls; the step text on the right changes, and the picture on the left redraws to match (bars grow, dots fall into place, lines draw themselves, numbers count up). A transit rail under the tab bar shows the eleven chapters, the current one and how far the reader has got; each station jumps to its chapter. On a phone the picture is pinned at the top and the text scrolls below it. Reduced-motion settings switch the animation off.
 
-Code: `templates/explainer.js`, inlined into `app.js` at `/*__EXPLAINER_JS__*/` by `report.py`.
+Chapters (66 steps):
+
+1. **Why it matters** — lenders, the SOE and the treasury; how a company's debts become contingent liabilities of the budget; the three questions the tool answers.
+2. **The website in one picture** — the seven tabs as stations on one line, each with the question it answers and a small live view of what it shows (Home → KPI Dashboard → Distress Indicator → Expected Fiscal Cost → Shock Scenarios → Early Warning → Report), then how the cycle repeats with next year's accounts. Each step links to its tab.
+3. **Seven numbers from the accounts** — what the SOE owns, what it owes, equity, operating profit, retained earnings.
+4. **Four health checks** — X1–X4 one at a time, then against the healthiest SOE in the data.
+5. **One distress score, three zones** — the weights, the weighted checks added up as a waterfall, the score line with its zones, every SOE in the data, and a "try it" with four sliders.
+6. **From score to rating to the chance of distress** — the 20-step ladder, indicative ratings, 1,000 dots for the PD, the PD staircase.
+7. **Expected fiscal cost** — EAD × LGD × PD for the example, why it is an average, the portfolio total.
+8. **How a shock travels** — pick fuel, exchange rate, interest rates, revenue, arrears or the standard stress on the picture; the shock lights up the accounts map step by step (income statement → profit and cash → balance sheet → health checks → result) with the example SOE's changes; then the paths with and without the shock and "shocks make each other worse" (one at a time vs all together). Opens the same shock in Shock Scenarios.
+9. **Many possible futures** — one draw, 300 draws as a cloud, the cloud stacked into a histogram, P50 and P95, and what P95 is not.
+10. **The whole portfolio under one shock, and checking the model** — the macro-shock ranking and its data flag, and the model check against past years with the gap explained.
+11. **From numbers to action** — the rule groups, the signal board, an action plan, the report.
+
+Then a **tool map** (every tab: the question it answers, what it shows, what to set, what to leave at its default, what is for analysts), **the whole chain in six lines**, **which number am I looking at?** (the four expected costs one SOE shows in different places, and why they differ), what the tool is not, and a searchable glossary (`config.HOW_GLOSSARY`).
+
+Every other tab now carries a link under its title, "New to this tab? How to read it →", that opens the matching part of the guide; the shock buttons in Shock Scenarios open chapter 8 with that shock selected.
+
+Code: `templates/explainer.js` (inlined into `app.js` at `/*__EXPLAINER_JS__*/` by `report.py`): a small stage kit (keyed SVG and HTML elements that animate between states), one `draw(stage, step)` per chapter, and a scroll controller. Styles in the `.hw` block of `templates/app.css`.
 
 ## 3. Bug fix: government-arrears write-down
 
@@ -68,9 +84,9 @@ New test `tests/check_arrears_cap.py` (19,320 checks on the demo portfolio with 
 
 ## 5. Files
 
-- `templates/app.html` — tab order, How it works page, hidden tabs.
-- `templates/app.js` — Home, Shock Scenarios (panel, single view, macro ranking, model check, bridge and ranking charts), Early Warning, wording.
-- `templates/explainer.js` — new How it works tab.
+- `templates/app.html` — tab order, How it works page, hidden tabs, the guide's two typefaces (Overpass, Atkinson Hyperlegible).
+- `templates/app.js` — "How to read this tab" links on every tab, Home, Shock Scenarios (panel, single view, macro ranking, model check, bridge and ranking charts), Early Warning, wording.
+- `templates/explainer.js` — new How it works tab (scroll-driven guide).
 - `templates/app.css` — styles for the above.
 - `templates/engine.js`, `shocks.py` — arrears write-down cap.
 - `config.py` — `SHOCK_TYPES`, `SHOCK_SIZE_NOTE`, `HOW_GLOSSARY`, `TRIGGER_CATEGORIES`, trigger rule categories and steps, two new rules, two register rows.

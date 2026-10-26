@@ -103,7 +103,8 @@ The **HTML version** page (next to Home in the top nav) exports the whole
 tool as one self-contained `.html` file. Tabs, in the order agreed on
 2026-10-26 (see `docs/CHANGES-meeting-2026-10-26.md`): Home (overview, scope,
 toolkit modules, upload with column mapping, data quality), **How it works**
-(plain-language guide for non-specialists and interactive shock
+(scroll-driven guide for non-specialists: the website tab by tab, then
+every step of the calculation for one example SOE, with interactive shock
 transmission), KPI Dashboard, Distress Indicator (Altman Z-EM), Expected
 Fiscal Cost, Shock Scenarios (PD × EAD × LGD first; no shock / standard
 stress / one custom shock at a time; one SOE, range of outcomes (Monte

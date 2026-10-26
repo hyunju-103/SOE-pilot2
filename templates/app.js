@@ -647,8 +647,14 @@
     document.querySelectorAll("main .page").forEach((p) => { p.hidden = p.id !== id; });
     $("#filterbar").hidden = !FILTER_TABS.has(id);
     const root = document.getElementById(id);
+    document.body.dataset.tab = id;
     if (!S.built[id] || force) { pages[id].build(root); S.built[id] = true; }
     pages[id].render();
+    // every tab links to the part of the How it works guide that explains it
+    if (HW_GUIDE[id]) {
+      const ph = root.querySelector(".page-head > div:first-child");
+      if (ph && !ph.querySelector(".hw-guide")) ph.appendChild(el("a", { class: "hw-guide", href: "#view-how", onclick: (e) => { e.preventDefault(); goHow(HW_GUIDE[id]); } }, "New to this tab? How to read it →"));
+    }
     // "#view-<tab>" deep-links a tab; the token matches no element id, so the browser never jumps the page to it
     try { history.replaceState(null, "", "#view-" + id); } catch (e) { /* hash is optional */ }
   }
@@ -1691,12 +1697,12 @@
     d.addEventListener("toggle", () => { store[key] = d.open; if (d.open && onOpen) onOpen(); });
     return d;
   }
-  /** opens How it works at the shock-transmission section, on the given shock */
+  /** opens How it works at the shock-transmission chapter, on the given shock */
   function goHowShock(id) {
     S.how = S.how || {};
     if (id) S.how.shock = id;
-    showTab("how");
-    requestAnimationFrame(() => { const n = document.getElementById("how-shock"); if (n) n.scrollIntoView({ block: "start" }); else window.scrollTo({ top: 0 }); });
+    S.built.how = false; // the chapter's step texts depend on the shock
+    goHow("hw-shocks");
   }
   /** seeded standard normal draws (mulberry32 + Box–Muller), for the macro shock */
   function normals(seed) {

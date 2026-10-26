@@ -4,7 +4,7 @@
 
 ## 이번 반영본에서 달라진 점
 - **탭 순서**: Home · How it works · KPI Dashboard · Distress Indicator · Expected Fiscal Cost · Shock Scenarios · Early Warning · Report(마지막). Government Support와 Assumptions(→ "Technical notes")는 탭 바에서 숨겼지만 삭제하지 않았습니다(링크 또는 `#view-gre`, `#view-assumptions`로 열림).
-- **How it works (신규)**: 비전문가용 설명 화면. 6단계 체인(재무제표 → 건전성 지표 → 점수 → 등급 → 부실 확률 → 기대 재정비용)과 **충격 전달(shock transmission)**: 충격을 고르면 어떤 계정을 먼저 치고, 어떻게 점수·확률·재정비용까지 전달되는지 예시 SOE의 실제 숫자로 보여줍니다. 기존 "How SOE Pilot Works" 설명서를 툴 안으로 옮겨 실시간 계산으로 바꾼 것입니다.
+- **How it works (신규)**: 비전문가용 설명 화면. 기존 "How SOE Pilot Works" 설명서와 같은 디자인(지하철 노선 모양 진행 바, 스크롤하면 왼쪽 그림이 단계마다 다시 그려지는 효과)으로 만들었고, 숫자는 모두 툴에 올린 데이터로 실시간 계산됩니다. 11개 챕터: ① 왜 중요한가 ② **웹사이트 한눈에 보기**(7개 탭이 각각 어떤 질문에 답하는지, 어떤 순서로 쓰는지) ③ 재무제표 7개 숫자 ④ 건전성 지표 4개 ⑤ 부실 점수와 3개 구간(직접 움직여 보는 슬라이더 포함) ⑥ 등급과 부실 확률 ⑦ 기대 재정비용 ⑧ **충격이 전달되는 경로**(충격을 고르면 계정 지도에 단계별로 불이 들어옴) ⑨ 몬테카를로 ⑩ 포트폴리오 충격 순위와 모델 검증 ⑪ 조기경보와 보고서. 마지막에 탭별 "무엇을 설정하고 무엇은 기본값으로 둘지" 지도, 용어집. 다른 모든 탭 제목 아래에 "New to this tab? How to read it →" 링크가 있어 해당 설명으로 바로 갑니다.
 - **Shock Scenarios 개편**: ① SOE와 기준연도 ② PD × EAD × LGD 설정(맨 위) ③ 충격: No shock / Standard stress / Custom shock(드롭다운으로 연료·환율·금리·매출·체납 중 하나 선택, 충격 크기 먼저 → 구조 요인) ④ 시간 범위(모든 충격 공통) ⑤ 고급 설정(접힘). 결과는 "충격 전달" 요약, 워터폴(브리지) 차트 2개, 경로 그래프 중심이고 표는 접어 두었습니다.
 - **"All SOEs" 화면 삭제 → 두 화면으로 대체**: Portfolio macro shock(모든 SOE에 같은 매출 감소·금리 상승, 몬테카를로, 재정비용을 가장 많이 늘리는 SOE 순위)과 Model check(과거 연도에서 출발해 충격을 준 예측 경로와 실제 재무제표 점수를 비교하는 in-sample 검증).
 - **버그 수정**: 체납(arrears) 충격이 크면 총자산이 음수가 되어 Distress → Safe로 튀던 문제. 상각액을 남은 비현금 유동자산 이내로 제한(Python·JS 동일). 신규 테스트 `tests/check_arrears_cap.py`.
