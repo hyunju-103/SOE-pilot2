@@ -8,7 +8,7 @@
 - **Shock Scenarios 배치**: Distress score path · Expected fiscal cost path 행을 "what moved it" 그래프 두 개보다 위로 올렸습니다.
 - **첫 화면 2단 배치**: Load data(왼쪽)와 What the tool finds in this data(오른쪽, 카드 2×2)를 한 행에 놓고 여백을 줄였습니다. 화면 폭 1000px 미만에서는 위아래로 쌓입니다. Data preview·Column mapping 표를 펼치면 오른쪽 카드 위로 넘치던 문제를 고쳐, 표가 왼쪽 칸 안에서 가로로 스크롤됩니다.
 - **첫 화면 소개글**: 제목 아래 두 줄 설명을 팀이 준 소개글("Governments often learn about the fiscal cost…")로 바꿨습니다. 문장은 그대로 두고 한 문단으로 보여 줍니다.
-- **업로드 상자를 첫 화면에**: 소개글 뒷부분(충격·한계)은 "…as a share of GDP." 바로 옆의 연한 회색 **more...**를 누르면 같은 문단 안에서 이어서 보입니다(펼치면 **less**). 소개글은 제목보다 양쪽으로 살짝(28px) 긴 폭에 줄 간격을 넉넉히 두고, 제목은 한 줄로 줄였으며, **What the tool calculates**는 Load data 행 아래로 옮겼습니다. 1366×768, 1440×900, 1920×1080 화면에서 스크롤 없이 업로드 상자가 보입니다.
+- **업로드 상자를 첫 화면에**: 소개글 뒷부분(충격·한계)은 "…as a share of GDP." 바로 옆의 연한 회색 **more...**를 누르면 같은 문단 안에서 이어서 보입니다(펼치면 **less**). 소개글을 가로로 넓게 펴고 제목을 한 줄로 줄였으며, **What the tool calculates**는 Load data 행 아래로 옮겼습니다. 1366×768, 1440×900, 1920×1080 화면에서 스크롤 없이 업로드 상자가 보입니다.
 - **Shock Scenarios 보기 이름**: "Range of outcomes" → **"Monte Carlo simulation"**. 계산은 바뀌지 않았습니다.
 
 ---
