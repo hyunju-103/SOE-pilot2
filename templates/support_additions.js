@@ -112,7 +112,7 @@
     c.body.append(el("p", { class: "note", style: "margin-top:0" },
       `${n} SOE-year record(s) have tariff / PSO compensation. ${check}. See the supplemental charts in KPI Dashboard and Government Support, plus the audit details in Assumptions.`));
     if (m && m.conflicts.length) c.body.append(el("p", { class: "alert-box warn", style: "margin-top:10px" }, `${m.conflicts.length} primary/detail amount mismatch(es) need review; primary values were kept.`));
-    document.getElementById("home").append(c.root);
+    document.getElementById("about").append(c.root); // the start screen stays clean; details live on About
   }
   function showSupportKPI() {
     if (S.kpi.view !== "trend") return;
@@ -232,7 +232,7 @@
   }
   // Wrap original render methods rather than replacing the existing dashboards.
   // A change in SOE/period or the GRE selection updates only the add-on card.
-  [ ["home", showSupportHome], ["kpi", showSupportKPI], ["gre", showSupportGRE],
+  [ ["about", showSupportHome], ["kpi", showSupportKPI], ["gre", showSupportGRE],
     ["assumptions", showSupportAssumptions], ["shock", showSupportShock] ].forEach(([tab, extra]) => {
     const original = pages[tab].render;
     pages[tab].render = function (...args) {

@@ -317,7 +317,8 @@
   function hbars(box, rows, opt = {}) {
     const W = widthOf(box), narrow = W < 520;
     // narrow cards: size the label column to the longest name (up to ~40% of the width) instead of a fixed 76px
-    const maxLen = Math.max(4, ...rows.map((r) => String(r.label).length));
+    // (the grey sub-line, e.g. "CCC+ · PD 16.3%", counts too, so it is not cut short)
+    const maxLen = Math.max(4, ...rows.map((r) => Math.max(String(r.label).length, r.sub ? String(r.sub).length * (6.2 / 7.4) : 0)));
     const L = narrow ? Math.max(64, Math.min(Math.round(W * 0.42), Math.round(maxLen * 7.4) + 8)) : opt.L || 164, R = narrow ? 72 : opt.R || 104, T = opt.shade ? 20 : 6, B = 28, rowH = opt.rowH || 38, bh = 14;
     const nName = narrow ? Math.max(6, Math.floor((L - 8) / 7.4)) : 24, nSub = narrow ? Math.max(6, Math.floor((L - 6) / 6.2)) : 26;
     const vals = rows.map((r) => r.v).filter(ok);
@@ -532,9 +533,11 @@
     S.years = uniq(S.en.map((r) => r.Year)).sort((a, b) => a - b);
     S.names = uniq(S.en.map((r) => r.Entity)).sort();
     S.gdp = key === "report" && M.gdp ? M.gdp : null;
-    S.gdpInputUnit = "statements";
-    S.gdpCountry = "SEN";  // Sensible starting point for SENELEC; user can choose any country.
-    S.gdpResult = null;
+    // GDP lookup: nothing is looked up until a country is chosen (or the data carry a Country column)
+    S.gdpSrc = S.gdp ? { kind: "manual" } : null;
+    S.gdpInputUnit = S.gdpInputUnit || "billion";
+    S.gdpCountry = "";
+    S.gdpSeries = null; // set from the statements' currency: US dollars when they are in USD, else local currency
     S.gdpYear = null;
     S.growth = M.gdp_growth ?? CFG.DEFAULT_GDP_GROWTH;
     S.volCache = {};
@@ -649,6 +652,7 @@
     const root = document.getElementById(id);
     document.body.dataset.tab = id;
     if (!S.built[id] || force) { pages[id].build(root); S.built[id] = true; }
+    else root.querySelectorAll(".gdp-control").forEach((b) => b._sync && b._sync()); // GDP is shared by the EFC and Shock tabs
     pages[id].render();
     // every tab links to the part of the How it works guide that explains it
     if (HW_GUIDE[id]) {
@@ -663,7 +667,7 @@
   if (bandUp) bandUp.addEventListener("click", () => {
     showTab("home"); window.scrollTo({ top: 0 });
     const c = document.getElementById("uploadCard");
-    if (c) { c.classList.remove("flash"); void c.offsetWidth; c.classList.add("flash"); const z = c.querySelector("label.btn"); if (z) z.focus(); }
+    if (c) { c.classList.remove("flash"); void c.offsetWidth; c.classList.add("flash"); const z = document.getElementById("upload"); if (z) z.focus(); }
   });
   function rebuild() { const root = document.getElementById(S.tab); pages[S.tab].build(root); pages[S.tab].render(); }
 
@@ -815,29 +819,27 @@
         el("p", { class: "note" }, "A bank is built differently from other companies: what it owns (its loans) is what other people owe. Its health is judged on capital, asset quality and liquidity rules, not on the ratios used here, and its risks spread through the financial system (deposit runs, contagion between banks). Assessing it needs a separate framework and stress tests, usually done by financial-sector specialists. This tool is designed for non-financial SOEs. Government backing of bank lending to SOEs (for example a letter of comfort) is a link worth noting, but it is not modelled here.")));
     return c.root;
   }
-  pages.home = {
+  /** the longer Home material from the 2026-10-26 meeting: load data, data quality, how to use the tool, scope, toolkit */
+  pages.about = {
     build(root) {
       const H = {};
       this.H = H;
-      H.hero = el("div", { class: "card hero compact" });
-      H.tiles = el("div", { class: "tiles" });
-      H.upload = el("div", { class: "card top upload-card stacked", id: "uploadCard" });
+      H.upload = el("div", { class: "card top upload-card stacked" });
       H.more = el("div", { class: "card upl-more-card" });
       H.dq = card("Data quality and provenance", "Where the numbers come from, as far as the file says", null, "top");
       H.about = card("The tabs at a glance", null, null);
       const mods = el("div", { class: "modules four" }, MODULES.map(([name, status, k, text]) => el("div", { class: "module" + (k === "ok" ? " on" : "") },
         el("div", { class: "tile-top" }, el("span", { class: "module-name" }, name), stChip(k, status)), el("p", {}, text))));
       root.replaceChildren(
-        pageHead("SOE FISCAL RISK TOOL", "SOE Fiscal Risk Dashboard",
+        pageHead("ABOUT THE TOOL", "About the tool and your data",
           "When a state-owned enterprise (SOE) cannot pay its debts, the budget usually pays. This tool estimates how much that could cost, shows which SOEs to look at first, and tests what could make it worse. It is a first screen for country economists, built from each SOE's yearly accounts.",
-          el("button", { class: "btn primary", type: "button", onclick: () => { showTab("how"); window.scrollTo({ top: 0 }); } }, "New here? How it works →")),
-        el("div", { class: "grid home-top" }, el("div", { class: "s6" }, H.upload), el("div", { class: "s6 stack" }, H.hero, H.tiles)),
+          el("button", { class: "btn", type: "button", onclick: () => { showTab("home"); window.scrollTo({ top: 0 }); } }, "Back to the start screen")),
+        el("div", { class: "grid home-top" }, el("div", { class: "s6" }, H.upload), el("div", { class: "s6" }, H.dq.root)),
         H.more,
         el("h3", { class: "sec-label" }, "How to use it"), workflow(),
-        el("div", { class: "grid", style: "margin-top:16px" }, el("div", { class: "s12" }, scopeCard())),
+        el("div", { class: "grid", style: "margin-top:16px" }, el("div", { class: "s7" }, scopeCard()), el("div", { class: "s5" }, H.about.root)),
         el("h3", { class: "sec-label" }, "The SOE fiscal-risk toolkit, and where this tool sits"), mods,
         el("p", { class: "note" }, "How they connect: this early-warning screen stays general and flags SOEs in trouble; a power utility it flags goes to the energy-sector model for a deep dive, which also covers the rest of the sector. Hidden subsidies and PSO analysis look at what the State already gives each SOE."),
-        el("div", { class: "grid", style: "margin-top:16px" }, el("div", { class: "s7" }, H.dq.root), el("div", { class: "s5" }, H.about.root)),
         notThis(),
         el("details", { class: "plain analyst-fold" }, el("summary", {}, "For analysts: main assumptions and limitations"), modelNotes()),
       );
@@ -845,12 +847,12 @@
       this.buildQuality(H.dq.body);
       this.buildAbout(H.about.body);
     },
-    /** top of Home: load a file, or switch to one of the built-in datasets */
+    /** top of About: load a file, or switch to one of the built-in datasets */
     buildUpload(box) {
       const msg = el("div");
-      const input = el("input", { type: "file", id: "upload", accept: ".csv,.xlsx,.xls,.txt", class: "sr-file" });
-      const pick = el("label", { class: "btn primary", for: "upload" }, "Choose a file");
-      const dz = el("div", { class: "dropzone big", id: "dropzone" },
+      const input = el("input", { type: "file", id: "upload-about", accept: ".csv,.xlsx,.xls,.txt", class: "sr-file" });
+      const pick = el("label", { class: "btn primary", for: "upload-about" }, "Choose a file");
+      const dz = el("div", { class: "dropzone big" },
         el("div", { class: "dz-icon", "aria-hidden": "true" }, "⬆"),
         el("div", { class: "dz-text" }, el("b", {}, "Drop a CSV or Excel file here"), el("span", { class: "muted" }, " or "), pick, input),
         el("small", { class: "muted" }, "One row per SOE-year. Column names are matched to the standard schema, numbers such as 1,234 · (1,234) · 35% are read, and title rows above the table are skipped. The file is read in this browser only; nothing is sent anywhere."));
@@ -924,8 +926,78 @@
           simpleTable(["Term", "Meaning"], Object.entries(CFG.GLOSSARY).map(([k, v]) => [k, v]), { cls: "glossary" })),
       );
     },
+    render() {},
+  };
+
+  /* =====================================================================
+     HOME — the start screen: one question, one upload box, and the four questions the tool
+     answers, each with today's answer for the loaded data. The longer material is on About.
+     ===================================================================== */
+  const goTop = (id) => { showTab(id); window.scrollTo({ top: 0 }); };
+  function uploadIcon() {
+    const svg = svgEl("svg", { viewBox: "0 0 24 24", width: 22, height: 22, "aria-hidden": "true", class: "lp-ico" });
+    svgEl("path", { d: "M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5", fill: "none", stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round" }, svg);
+    svgEl("path", { d: "M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4", fill: "none", stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round" }, svg);
+    return svg;
+  }
+  pages.home = {
+    build(root) {
+      const H = (this.H = {});
+      const msg = el("div", { class: "lp-msg" });
+      const input = el("input", { type: "file", id: "upload", accept: ".csv,.xlsx,.xls,.txt", class: "sr-file", "aria-label": "Upload SOE financial statements, CSV or Excel" });
+      const bar = el("label", { class: "lp-search", id: "uploadCard", for: "upload" },
+        uploadIcon(),
+        el("span", { class: "lp-ph" }, el("b", {}, "Drop your SOEs' financial statements here"),
+          el("span", {}, "CSV or Excel, one row per SOE and year. The file stays in your browser.")),
+        el("span", { class: "lp-pick" }, "Choose a file"));
+      const handle = (file) => readUpload(file, msg);
+      input.addEventListener("change", () => { const f = input.files[0]; if (f) handle(f); input.value = ""; });
+      bar.addEventListener("dragover", (e) => { e.preventDefault(); bar.classList.add("over"); });
+      bar.addEventListener("dragleave", () => bar.classList.remove("over"));
+      bar.addEventListener("drop", (e) => { e.preventDefault(); bar.classList.remove("over"); if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]); });
+      // built-in datasets as plain links; the one on screen is marked
+      const copyOf = DATASETS.report ? ["sample", "demo", "long"].find((k) => DATASETS[k] && DATASETS[k].label === DATASETS.report.label) : null;
+      const active = S.key === "report" && copyOf ? copyOf : S.key;
+      const ds = (key, label) => DATASETS[key] ? el("button", { type: "button", class: "lp-ds", "aria-pressed": String(active === key),
+        onclick: () => loadDataset(DATASETS[key].rows, DATASETS[key].label, DATASETS[key].example, key) }, label) : null;
+      const tmpl = el("button", { type: "button", class: "lp-ds", onclick: () => (canDownload ? download("soe_tool_template.csv", templateCSV()) : goTop("about")) }, "the standard template");
+      const tryRow = el("p", { class: "lp-try" }, "No file yet? Explore ", ds("demo", "the demo portfolio"), ", ", ds("sample", "a two-SOE example"), " or ", ds("long", "a 30-SOE panel"), ". Start from ", tmpl, ".");
+      const loaded = S.key === "upload" && S.uploadNote ? el("p", { class: "lp-loaded" }, S.uploadNote, " ", go("about", "Check the column mapping and data preview")) : null;
+      H.now = el("p", { class: "lp-now" });
+      H.qs = el("div", { class: "lp-qs" });
+      root.replaceChildren(el("div", { class: "lp" },
+        el("h2", { class: "lp-title" }, "What would you like to analyze?"),
+        el("p", { class: "lp-lede" }, "Upload the yearly accounts of a country's state-owned enterprises to see their fiscal risk: which SOEs are weak, what they could cost the budget, and what a shock would do."),
+        el("div", { class: "lp-box" }, bar, input), tryRow, loaded, msg,
+        H.now, H.qs,
+        el("nav", { class: "lp-links", "aria-label": "More" }, go("how", "How it works"), go("kpi", "KPI Dashboard"), go("report", "Report"), go("about", "About the tool and your data"))));
+    },
     render() {
-      overviewBlocks(this.H.hero, this.H.tiles, standardStress(allRows()));
+      const H = this.H, all = allRows(), rows = latestOf(all), n = rows.length, zc = zoneCounts(rows);
+      const st = standardStress(all), stress = Object.fromEntries(st.map((x) => [x.row.Entity, x]));
+      const total = sum(rows.map((r) => E.efcRow(r, S.efc.lgd, S.efc.ead, S.efc.basis).EFC));
+      const drops = st.filter((x) => x.drop).length;
+      const eB = sum(st.map((x) => last(x.base).EFC)), eS = sum(st.map((x) => last(x.str).EFC));
+      const { by } = evalTriggers(rows, stress);
+      const lv = (k) => rows.filter((r) => by[r.Entity] && by[r.Entity].level === k).length;
+      const yrs = S.years.length > 1 ? `${S.years[0]}–${last(S.years)}` : String(S.years[0] ?? "");
+      // built-in examples already say what they are in their label; an uploaded file is described
+      put(H.now, "Showing ", el("b", {}, S.label || "your data"), S.example ? (String(S.label).includes(yrs) ? "." : `, accounts ${yrs}.`) : `: ${pl(n, "SOE")} in ${pl(S.sectors.length, "sector")}, accounts ${yrs}.`);
+      const zones = (sub) => el("span", { class: "lp-q-sub" }, sub, el("span", { class: "lp-zones", role: "img", "aria-label": `${zc.Distress} in distress, ${zc.Grey} in the grey zone, ${zc.Safe} safe` },
+        ...[["Distress", "d"], ["Grey", "g"], ["Safe", "s"]].filter(([z]) => zc[z]).map(([z, c]) => el("i", { class: "z-" + c, style: `flex:${zc[z]}` }))));
+      // four rows per card (question, answer, what it means, where to go) so the answers line up across cards
+      const q = (tab, ask, value, unit, sub, dest) => el("a", { class: "lp-q", href: "#view-" + tab, onclick: (e) => { e.preventDefault(); goTop(tab); } },
+        el("span", { class: "lp-q-ask" }, ask),
+        el("span", { class: "lp-q-val" }, el("b", { class: "num" }, value), unit ? el("small", {}, unit) : null),
+        typeof sub === "string" ? el("span", { class: "lp-q-sub" }, sub) : sub,
+        el("span", { class: "lp-q-go" }, "Open " + dest));
+      const watch = lv("watch");
+      const rise = eB > 0 ? eS / eB - 1 : NaN;
+      put(H.qs,
+        q("altman", "Which SOEs are in trouble?", String(zc.Distress + zc.Grey), `of ${n}`, zones(`in distress or the grey zone, ${zc.Distress} of them in distress`), "Distress Indicator"),
+        q("efc", "What could they cost the budget?", money(total), CUR, S.gdp ? `expected fiscal cost, ${pctS(total / S.gdp)} of GDP` : "expected fiscal cost, from the latest accounts", "Expected Fiscal Cost"),
+        q("shock", "What if a shock hits?", String(drops), `of ${n}`, `fall a risk zone under the standard stress` + (ok(rise) && rise > 0.005 ? `; expected cost rises ${pct0(rise)} by year ${CFG.MC_HORIZON_YEARS}` : ""), "Shock Scenarios"),
+        q("warning", "What needs action now?", String(lv("alert")), `of ${n}`, `have an alert signal` + (watch ? `, and ${watch} more ${watch === 1 ? "is" : "are"} on watch` : ""), "Early Warning"));
     },
   };
   function readUpload(file, msg) {
@@ -1332,175 +1404,230 @@
   /* =====================================================================
      EXPECTED FISCAL COST
      ===================================================================== */
-  /* World Bank World Development Indicators: GDP (current LCU), NY.GDP.MKTP.CN.
-   * GDP raw values are in full local currency units; S.gdp is always kept in
-   * the same numeric scale as the uploaded financial statements (raw / SC).
-   * No FX conversion is guessed, and GDP is applied only after explicit review.
-   */
-  const GDP_UNIT_FACTORS = { statements: null, units: 1, thousand: 1e3, million: 1e6, billion: 1e9 };
-  const GDP_FALLBACK_COUNTRIES = [
-    ["SEN", "Senegal", "West African CFA franc"], ["CIV", "Côte d'Ivoire", "West African CFA franc"],
-    ["GHA", "Ghana", "Ghanaian new cedi"], ["NGA", "Nigeria", "Nigerian naira"],
-    ["CMR", "Cameroon", "Central African CFA franc"], ["KEN", "Kenya", "Kenyan shilling"],
-    ["ZAF", "South Africa", "South African rand"], ["USA", "United States", "U.S. dollar"],
-    ["KOR", "Korea, Rep.", "Korean won"], ["FRA", "France", "Euro"]
-  ];
-  const GDP_CUR_CODE = {
-    "west african cfa franc": "XOF", "cfa franc bceao": "XOF", "central african cfa franc": "XAF",
-    "cfa franc beac": "XAF", "us dollar": "USD", "u.s. dollar": "USD", "united states dollar": "USD",
-    "euro": "EUR", "korean won": "KRW", "ghanaian new cedi": "GHS", "ghanaian cedi": "GHS",
-    "nigerian naira": "NGN", "kenyan shilling": "KES", "south african rand": "ZAR",
-    "japanese yen": "JPY", "pound sterling": "GBP", "british pound": "GBP", "indian rupee": "INR",
-    "canadian dollar": "CAD", "chinese yuan": "CNY", "australian dollar": "AUD",
+  /* Country GDP from the World Bank's World Development Indicators, in one of two series:
+   *   NY.GDP.MKTP.CN  GDP (current LCU)  — the country's own currency
+   *   NY.GDP.MKTP.CD  GDP (current US$)
+   * Picking a country and a year looks GDP up and fills it in automatically; the units list then only sets how
+   * the number is shown and typed. S.gdp is always kept in the statements' own scale (raw / SC).
+   * No FX conversion is guessed: a GDP in another currency than the statements is filled in but not used
+   * until the user ticks "use it anyway". */
+  const GDP_SERIES = {
+    CN: { code: "NY.GDP.MKTP.CN", name: "GDP (current LCU)" },
+    CD: { code: "NY.GDP.MKTP.CD", name: "GDP (current US$)" },
   };
+  // World Bank economies: ISO3 | name as the World Bank writes it | ISO 4217 code of the currency of its LCU series.
+  // Kept in the page because the World Bank's country list carries no currency, and so the list works offline.
+  const GDP_COUNTRIES = ("AFG|Afghanistan|AFN;ALB|Albania|ALL;DZA|Algeria|DZD;ASM|American Samoa|USD;AND|Andorra|EUR;AGO|Angola|AOA;" +
+    "ATG|Antigua and Barbuda|XCD;ARG|Argentina|ARS;ARM|Armenia|AMD;ABW|Aruba|AWG;AUS|Australia|AUD;AUT|Austria|EUR;AZE|Azerbaijan|AZN;" +
+    "BHS|Bahamas, The|BSD;BHR|Bahrain|BHD;BGD|Bangladesh|BDT;BRB|Barbados|BBD;BLR|Belarus|BYN;BEL|Belgium|EUR;BLZ|Belize|BZD;BEN|Benin|XOF;" +
+    "BMU|Bermuda|BMD;BTN|Bhutan|BTN;BOL|Bolivia|BOB;BIH|Bosnia and Herzegovina|BAM;BWA|Botswana|BWP;BRA|Brazil|BRL;" +
+    "VGB|British Virgin Islands|USD;BRN|Brunei Darussalam|BND;BGR|Bulgaria|EUR;BFA|Burkina Faso|XOF;BDI|Burundi|BIF;CPV|Cabo Verde|CVE;" +
+    "KHM|Cambodia|KHR;CMR|Cameroon|XAF;CAN|Canada|CAD;CYM|Cayman Islands|KYD;CAF|Central African Republic|XAF;TCD|Chad|XAF;" +
+    "CHI|Channel Islands|GBP;CHL|Chile|CLP;CHN|China|CNY;COL|Colombia|COP;COM|Comoros|KMF;COD|Congo, Dem. Rep.|CDF;COG|Congo, Rep.|XAF;" +
+    "CRI|Costa Rica|CRC;CIV|Cote d'Ivoire|XOF;HRV|Croatia|EUR;CUB|Cuba|CUP;CUW|Curacao|ANG;CYP|Cyprus|EUR;CZE|Czechia|CZK;DNK|Denmark|DKK;" +
+    "DJI|Djibouti|DJF;DMA|Dominica|XCD;DOM|Dominican Republic|DOP;ECU|Ecuador|USD;EGY|Egypt, Arab Rep.|EGP;SLV|El Salvador|USD;" +
+    "GNQ|Equatorial Guinea|XAF;ERI|Eritrea|ERN;EST|Estonia|EUR;SWZ|Eswatini|SZL;ETH|Ethiopia|ETB;FRO|Faroe Islands|DKK;FJI|Fiji|FJD;" +
+    "FIN|Finland|EUR;FRA|France|EUR;PYF|French Polynesia|XPF;GAB|Gabon|XAF;GMB|Gambia, The|GMD;GEO|Georgia|GEL;DEU|Germany|EUR;GHA|Ghana|GHS;" +
+    "GIB|Gibraltar|GIP;GRC|Greece|EUR;GRL|Greenland|DKK;GRD|Grenada|XCD;GUM|Guam|USD;GTM|Guatemala|GTQ;GIN|Guinea|GNF;GNB|Guinea-Bissau|XOF;" +
+    "GUY|Guyana|GYD;HTI|Haiti|HTG;HND|Honduras|HNL;HKG|Hong Kong SAR, China|HKD;HUN|Hungary|HUF;ISL|Iceland|ISK;IND|India|INR;" +
+    "IDN|Indonesia|IDR;IRN|Iran, Islamic Rep.|IRR;IRQ|Iraq|IQD;IRL|Ireland|EUR;IMN|Isle of Man|GBP;ISR|Israel|ILS;ITA|Italy|EUR;" +
+    "JAM|Jamaica|JMD;JPN|Japan|JPY;JOR|Jordan|JOD;KAZ|Kazakhstan|KZT;KEN|Kenya|KES;KIR|Kiribati|AUD;PRK|Korea, Dem. People's Rep.|KPW;" +
+    "KOR|Korea, Rep.|KRW;XKX|Kosovo|EUR;KWT|Kuwait|KWD;KGZ|Kyrgyz Republic|KGS;LAO|Lao PDR|LAK;LVA|Latvia|EUR;LBN|Lebanon|LBP;" +
+    "LSO|Lesotho|LSL;LBR|Liberia|LRD;LBY|Libya|LYD;LIE|Liechtenstein|CHF;LTU|Lithuania|EUR;LUX|Luxembourg|EUR;MAC|Macao SAR, China|MOP;" +
+    "MDG|Madagascar|MGA;MWI|Malawi|MWK;MYS|Malaysia|MYR;MDV|Maldives|MVR;MLI|Mali|XOF;MLT|Malta|EUR;MHL|Marshall Islands|USD;" +
+    "MRT|Mauritania|MRU;MUS|Mauritius|MUR;MEX|Mexico|MXN;FSM|Micronesia, Fed. Sts.|USD;MDA|Moldova|MDL;MCO|Monaco|EUR;MNG|Mongolia|MNT;" +
+    "MNE|Montenegro|EUR;MAR|Morocco|MAD;MOZ|Mozambique|MZN;MMR|Myanmar|MMK;NAM|Namibia|NAD;NRU|Nauru|AUD;NPL|Nepal|NPR;" +
+    "NLD|Netherlands|EUR;NCL|New Caledonia|XPF;NZL|New Zealand|NZD;NIC|Nicaragua|NIO;NER|Niger|XOF;NGA|Nigeria|NGN;" +
+    "MKD|North Macedonia|MKD;MNP|Northern Mariana Islands|USD;NOR|Norway|NOK;OMN|Oman|OMR;PAK|Pakistan|PKR;PLW|Palau|USD;PAN|Panama|PAB;" +
+    "PNG|Papua New Guinea|PGK;PRY|Paraguay|PYG;PER|Peru|PEN;PHL|Philippines|PHP;POL|Poland|PLN;PRT|Portugal|EUR;PRI|Puerto Rico|USD;" +
+    "QAT|Qatar|QAR;ROU|Romania|RON;RUS|Russian Federation|RUB;RWA|Rwanda|RWF;WSM|Samoa|WST;SMR|San Marino|EUR;" +
+    "STP|Sao Tome and Principe|STN;SAU|Saudi Arabia|SAR;SEN|Senegal|XOF;SRB|Serbia|RSD;SYC|Seychelles|SCR;SLE|Sierra Leone|SLE;" +
+    "SGP|Singapore|SGD;SXM|Sint Maarten (Dutch part)|ANG;SVK|Slovak Republic|EUR;SVN|Slovenia|EUR;SLB|Solomon Islands|SBD;SOM|Somalia|SOS;" +
+    "ZAF|South Africa|ZAR;SSD|South Sudan|SSP;ESP|Spain|EUR;LKA|Sri Lanka|LKR;KNA|St. Kitts and Nevis|XCD;LCA|St. Lucia|XCD;" +
+    "MAF|St. Martin (French part)|EUR;VCT|St. Vincent and the Grenadines|XCD;SDN|Sudan|SDG;SUR|Suriname|SRD;SWE|Sweden|SEK;" +
+    "CHE|Switzerland|CHF;SYR|Syrian Arab Republic|SYP;TJK|Tajikistan|TJS;TZA|Tanzania|TZS;THA|Thailand|THB;TLS|Timor-Leste|USD;" +
+    "TGO|Togo|XOF;TON|Tonga|TOP;TTO|Trinidad and Tobago|TTD;TUN|Tunisia|TND;TUR|Turkiye|TRY;TKM|Turkmenistan|TMT;" +
+    "TCA|Turks and Caicos Islands|USD;TUV|Tuvalu|AUD;UGA|Uganda|UGX;UKR|Ukraine|UAH;ARE|United Arab Emirates|AED;GBR|United Kingdom|GBP;" +
+    "USA|United States|USD;URY|Uruguay|UYU;UZB|Uzbekistan|UZS;VUT|Vanuatu|VUV;VEN|Venezuela, RB|VES;VNM|Viet Nam|VND;" +
+    "VIR|Virgin Islands (U.S.)|USD;PSE|West Bank and Gaza|ILS;YEM|Yemen, Rep.|YER;ZMB|Zambia|ZMW;ZWE|Zimbabwe|ZWG")
+    .split(";").map((s) => s.split("|"));
+  const GDP_CUR_NAME = { XOF: "CFA franc (XOF)", XAF: "CFA franc (XAF)", USD: "US dollars", EUR: "euros" };
+  const gdpCurName = (c) => GDP_CUR_NAME[c] || c || "local currency";
+  const GDP_UNIT_FACTORS = { statements: null, units: 1, thousand: 1e3, million: 1e6, billion: 1e9 };
+  const GDP_CACHE = new Map(); // "CN|SEN|2024" → value in full currency units, or null when the World Bank has none
   const gdpUnitSize = (u) => u === "statements" ? SC : (GDP_UNIT_FACTORS[u] || 1);
-  const gdpNumber = (v) => Number(v).toLocaleString("en-US", {maximumFractionDigits: 4});
-  function gdpCurrencyStatus(countryCurrency) {
-    const dst=String(CUR || "").trim().toUpperCase(), local=String(countryCurrency||"").trim().toLowerCase();
-    const wb=GDP_CUR_CODE[local] || null;
-    if (!dst || dst==="LCU" || dst==="LOCAL CURRENCY" || dst==="NATIONAL CURRENCY") return "unknown";
-    if (/^(FCFA|CFA|CFA FRANC)$/.test(dst)) return wb==="XOF" || wb==="XAF" ? "match" : "mismatch";
-    if (dst==="XOF" || dst==="XAF") return dst===wb ? "match" : "mismatch";
-    if (!wb) return "unknown";
-    return dst===wb ? "match" : "mismatch";
+  const gdpNumber = (v) => { const a = Math.abs(v); return Number(v).toLocaleString("en-US", { maximumFractionDigits: a >= 1e6 ? 0 : a >= 100 ? 2 : 4 }); };
+  const gdpBig = (v) => { const a = Math.abs(v); return a >= 1e12 ? fmt(v / 1e12, 2) + " tn" : a >= 1e9 ? fmt(v / 1e9, 2) + " bn" : a >= 1e6 ? fmt(v / 1e6, 1) + " m" : gdpNumber(v); };
+  const foldAccents = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+  /** the statements' currency as a code: "CFA" for FCFA / CFA franc (either zone), else an ISO code, or null when not stated */
+  function stmtCurrency() {
+    const u = String(CUR || "").trim().toUpperCase().replace(/\./g, "");
+    if (!u || /^(LCU|LOCAL CURRENCY|NATIONAL CURRENCY)$/.test(u)) return null;
+    if (/^(F ?CFA|CFA|CFA ?F|CFA FRANCS?|FRANCS? CFA)$/.test(u)) return "CFA";
+    if (/^(US ?\$|\$|USD|US DOLLARS?|DOLLARS?)$/.test(u)) return "USD";
+    if (/^(€|EUR|EUROS?)$/.test(u)) return "EUR";
+    return /^[A-Z]{3}$/.test(u) ? u : null;
   }
+  function gdpCurrencyStatus(gdpCur) {
+    const s = stmtCurrency();
+    if (!s || !gdpCur) return "unknown";
+    if (s === "CFA") return gdpCur === "XOF" || gdpCur === "XAF" ? "match" : "mismatch";
+    return s === gdpCur ? "match" : "mismatch";
+  }
+  /** a Country column in the data (ISO3 code or World Bank name) picks the country for the user */
+  function dataCountry() {
+    const raw = foldAccents((S.rows.find((r) => r.Country) || {}).Country);
+    if (!raw) return "";
+    const hit = GDP_COUNTRIES.find(([c, n]) => c.toLowerCase() === raw || foldAccents(n) === raw || foldAccents(n).replace(/,.*$/, "") === raw);
+    return hit ? hit[0] : "";
+  }
+  const gdpKey = (series, country, year) => `${series}|${country}|${year}`;
   function gdpField(onChange) {
-    const id = nid("gdp"), countryId=nid("gdp-country"), yearId=nid("gdp-year"), unitId=nid("gdp-units");
-    const container = el("div", {class:"fld gdp-control"});
-    const label=el("label", {for:id}, el("span", {}, `Country GDP${CUR ? " (" + CUR + ")" : ""}`,
-      info("GDP for fiscal-risk ratios: nominal GDP in the same currency and scale as the SOE statements. World Bank GDP current LCU is full currency units; verify and apply the conversion below.")));
-    const unitOptions = [
-      ["statements", `Same as statements (${(S.rows.find(r=>r.Units)||{}).Units || "full currency units"})`],
-      ["units", "Full local currency units"], ["thousand", "Thousands (10³)"],
-      ["million", "Millions (10⁶)"], ["billion", "Billions (10⁹)"]];
-    const unitSel=el("select", {id:unitId, "aria-label":"GDP input units"},
-      unitOptions.map(([value,t])=>el("option", {value}, t)));
-    unitSel.value=S.gdpInputUnit || "statements";
-    const inp = el("input", {type:"number",id,min:"0",step:"any",placeholder:"Enter GDP, then select units"});
-    const hint = el("small", {}, "GDP is not filled until you select Apply; manual entry is also available.");
-    const countrySel = el("select", {id:countryId,"aria-label":"GDP country"});
-    const yearSel = el("select", {id:yearId,"aria-label":"GDP reference year"});
-    const preview=el("div",{class:"gdp-preview",role:"status","aria-live":"polite"},"Select a country and year to retrieve nominal GDP.");
-    const note=el("div",{class:"gdp-source"},
-      "Source: World Bank WDI · NY.GDP.MKTP.CN · ",
-      el("a",{href:"https://data.worldbank.org/indicator/NY.GDP.MKTP.CN",target:"_blank",rel:"noopener noreferrer"},"GDP (current LCU)"));
-    const confirmLabel=el("label",{class:"gdp-confirm"},
-      el("input",{type:"checkbox"}),
-      el("span",{},"I confirm that the selected country's GDP is in the same currency as my financial statements."));
-    confirmLabel.hidden=true;
-    const confirm=confirmLabel.querySelector("input");
-    const apply=el("button",{type:"button",class:"btn",disabled:true},"Apply GDP to model");
-    const unitLabel=el("label",{for:unitId,class:"unit-label"},"GDP input / displayed units");
-    const manual=el("div",{class:"gdp-manual"},unitLabel,unitSel,inp,hint);
-    const countryWrap=el("label",{},"Country",countrySel),yearWrap=el("label",{},"Year",yearSel);
-    const lookup=el("div",{class:"gdp-lookup"},
-      el("div",{class:"gdp-lookup-label"},"Look up nominal GDP · World Bank"),
-      el("div",{class:"gdp-lookup-grid"},countryWrap,yearWrap),preview,confirmLabel,apply,note);
-    container.append(label,lookup,manual);
-    let fetched=null, fetchId=0, countries=GDP_FALLBACK_COUNTRIES;
-    function showInput(){inp.value = S.gdp ? String(Number((S.gdp*SC/gdpUnitSize(unitSel.value)).toPrecision(12))) : "";}
-    function showHint(){
-      hint.textContent=S.gdp ? `Applied: ${gdpNumber(S.gdp)} in financial-statement units (${CUR || "LCU"}) · ${gdpNumber(S.gdp*SC)} full units`:
-        `Enter nominal GDP in the selected units. The model uses ${((S.rows.find(r=>r.Units)||{}).Units||"full units")} (${CUR||"LCU"}).`;
+    const valId = nid("gdp"), countryId = nid("gdp-country"), yearId = nid("gdp-year"), unitId = nid("gdp-units");
+    const stUnits = (S.rows.find((r) => r.Units) || {}).Units;
+    const anaYear = Number((S.tab === "efc" ? S.efc?.year : S.sh?.year) || last(S.years));
+    const box = el("div", { class: "fld gdp-control" });
+    const label = el("span", { class: "lbl" }, `Country GDP${CUR ? " (" + CUR + ")" : ""}`,
+      info("Nominal GDP, to show expected fiscal cost as a share of the economy. Pick a country and a year and the World Bank figure is filled in. Choose the series in the statements' currency: Local currency (GDP, current LCU) or US dollars (GDP, current US$). The units list only changes how the number is shown and typed. You can also type a value."));
+    if (!S.gdpSeries) S.gdpSeries = stmtCurrency() === "USD" ? "CD" : "CN";
+    const seriesSeg = seg([["CN", "Local currency"], ["CD", "US dollars"]], S.gdpSeries, (v) => { S.gdpSeries = v; renderSource(); lookup(); }, "World Bank GDP series");
+    seriesSeg.classList.add("gdp-series");
+    const countrySel = el("select", { id: countryId }, el("option", { value: "" }, "Select a country…"),
+      ...GDP_COUNTRIES.slice().sort((a, b) => a[1].localeCompare(b[1])).map(([c, n]) => el("option", { value: c }, n)));
+    const yearSel = el("select", { id: yearId });
+    const topYear = Math.max(new Date().getFullYear() - 1, last(S.years) || 0);
+    for (let yr = topYear; yr >= 1960; yr--) yearSel.appendChild(el("option", { value: String(yr) }, String(yr)));
+    const unitSel = el("select", { id: unitId, "aria-label": "GDP units" },
+      [["billion", "Billions"], ["million", "Millions"], ["thousand", "Thousands"], ["units", "Full units"],
+       ["statements", `As in the statements (${stUnits || "full units"})`]].map(([value, t]) => el("option", { value }, t)));
+    unitSel.value = S.gdpInputUnit || "billion";
+    const valInp = el("input", { type: "text", inputmode: "decimal", id: valId, autocomplete: "off", placeholder: "Filled in automatically" });
+    const status = el("div", { class: "gdp-status", role: "status", "aria-live": "polite" });
+    const anyway = el("label", { class: "gdp-confirm" }, el("input", { type: "checkbox" }), el("span", {}, "Use it anyway — I know the currencies differ"));
+    const anywayBox = anyway.querySelector("input");
+    const source = el("div", { class: "gdp-source" });
+    box.append(label,
+      el("div", { class: "gdp-step" }, el("span", { class: "gdp-sub" }, "World Bank series"), seriesSeg),
+      el("div", { class: "gdp-lookup-grid" }, el("label", { for: countryId }, "Country", countrySel), el("label", { for: yearId }, "Year", yearSel)),
+      el("div", { class: "gdp-step" }, el("label", { for: valId, class: "gdp-sub" }, "GDP"), el("div", { class: "gdp-value" }, valInp, unitSel)),
+      status, anyway, source);
+
+    let pending = null, fetchId = 0; // pending: a looked-up GDP held back because its currency differs from the statements
+    const fromData = !S.gdpCountry && dataCountry();
+    countrySel.value = S.gdpCountry || fromData || "";
+    if (fromData) S.gdpCountry = fromData;
+    yearSel.value = String(S.gdpYear || anaYear);
+    if (!yearSel.value) yearSel.selectedIndex = 0;
+    const countryName = (c) => (GDP_COUNTRIES.find((x) => x[0] === c) || [c, c])[1];
+    const countryCur = (c) => (GDP_COUNTRIES.find((x) => x[0] === c) || [])[2] || null;
+
+    function showValue() {
+      const raw = S.gdp ? S.gdp * SC : pending ? pending.value : null;
+      valInp.value = raw ? gdpNumber(raw / gdpUnitSize(unitSel.value)) : "";
+      valInp.classList.toggle("held", !!pending && !S.gdp);
     }
-    showInput();showHint();
-    const currentYear=new Date().getFullYear();
-    const defaultYr=String(S.gdpYear || (S.tab==="efc" ? S.efc?.year : S.sh?.year) || last(S.years) || currentYear-1);
-    for(let yr=currentYear;yr>=1960;yr--)yearSel.appendChild(el("option",{value:String(yr)},String(yr)));
-    yearSel.value=defaultYr;
-    const fillCountries=()=>{
-      const prev=countrySel.value || S.gdpCountry || "SEN";
-      countrySel.replaceChildren(...countries.map(([code,name])=>el("option",{value:code},name)));
-      countrySel.value=countries.some(c=>c[0]===prev)?prev:"SEN";
-      if(!countrySel.value)countrySel.selectedIndex=0;
-    };
-    fillCountries();
-    function validate(){
-      const c=GDP_FALLBACK_COUNTRIES.find(c=>c[0]===countrySel.value);
-      const selected=countries.find(c=>c[0]===countrySel.value)||c;
-      const currency=selected?.[2]||"";
-      const status=gdpCurrencyStatus(currency);
-      const sameYear=Number(yearSel.value)===Number((S.tab==="efc"?S.efc?.year:S.sh?.year)||yearSel.value);
-      confirmLabel.hidden=status==="match";
-      apply.disabled=!fetched || !Number.isFinite(fetched.value) || fetched.value<=0 || status==="mismatch" ||
-        (status==="unknown" && !confirm.checked) || !sameYear;
-      if(status==="mismatch")return `Currency mismatch: GDP is ${currency||"country LCU"}, but statements are ${CUR}. No automatic FX conversion is performed.`;
-      if(!sameYear)return `Reference year differs from the selected ${S.tab==="efc"?"EFC":"Shock Scenario"} base year; match the years before applying.`;
-      if(status==="unknown")return `Currency is not verified against statements (${CUR||"unknown"}). Confirm the match before applying.`;
-      return `Currency checked: ${currency||"country LCU"} aligns with statements (${CUR}).`;
+    function renderSource() {
+      const s = GDP_SERIES[S.gdpSeries];
+      source.replaceChildren("Source: World Bank WDI · ", el("a", { href: "https://data.worldbank.org/indicator/" + s.code, target: "_blank", rel: "noopener noreferrer" }, s.name), " · " + s.code);
     }
-    function renderPreview(){
-      if(!fetched)return;
-      const unit=unitOptions.find(([k])=>k===unitSel.value)?.[1] || "LCU";
-      const countryName=countries.find(c=>c[0]===countrySel.value)?.[1]||countrySel.value;
-      const n=fetched.value/gdpUnitSize(unitSel.value);
-      const status=validate();
-      preview.replaceChildren(el("b",{},`${countryName}, ${yearSel.value}: ${gdpNumber(n)}`),
-        el("span",{},` (${unit}) · ${gdpNumber(fetched.value)} full local currency units.`),
-        el("div",{style:"margin-top:3px"},status));
-    }
-    async function lookupGDP(){
-      fetched=null;confirm.checked=false;confirmLabel.hidden=true;apply.disabled=true;
-      const req=++fetchId,country=countrySel.value,year=yearSel.value;
-      if(!country || !year)return;
-      preview.textContent=`Looking up ${country} GDP for ${year}…`;
-      // World Bank Indicators API: country / year scoped, with no gap filling or imputed numbers.
-      const url=`https://api.worldbank.org/v2/country/${encodeURIComponent(country)}/indicator/NY.GDP.MKTP.CN?date=${encodeURIComponent(year)}&format=json&source=2`;
-      try{
-        const response=await fetch(url,{headers:{Accept:"application/json"}});
-        if(!response.ok)throw Error("World Bank API status "+response.status);
-        const data=await response.json();
-        if(req!==fetchId || !container.isConnected)return;
-        const value=Array.isArray(data)&&Array.isArray(data[1]) ? data[1].find(r=>r && r.date===year && Number.isFinite(r.value)) : null;
-        if(!value){preview.textContent=`World Bank has no reported GDP (current LCU) for ${country}, ${year}. Choose another year or enter GDP manually.`;return;}
-        fetched={value:Number(value.value),url,country,year};
-        S.gdpResult={value:fetched.value,source:"World Bank · NY.GDP.MKTP.CN",country,year};
-        renderPreview();
-      }catch(err){
-        if(req!==fetchId || !container.isConnected)return;
-        preview.textContent="Automatic GDP lookup is unavailable (network or API). You can still enter a verified value manually.";
+    function renderStatus(msg) {
+      const src = S.gdpSrc, cls = (k) => status.className = "gdp-status " + k;
+      anyway.hidden = !(pending || (src && src.forced));
+      anywayBox.checked = !!(src && src.forced);
+      if (msg) { cls(msg[0]); put(status, ...msg.slice(1)); return; }
+      if (pending) {
+        cls("warn");
+        put(status, el("b", {}, "Not used yet. "), `${countryName(pending.country)} ${pending.year} GDP is in ${gdpCurName(pending.cur)}, the statements are in ${CUR}. ` +
+          (pending.series === "CD" ? "Switch the series to Local currency, type" : "Type") + ` a GDP in ${CUR}, or tick below.`);
+        return;
       }
+      if (src && src.kind === "wb") {
+        const stat = gdpCurrencyStatus(src.cur), yearOff = anaYear && Number(src.year) !== anaYear;
+        cls(src.forced || yearOff ? "warn" : "ok");
+        const useYear = yearOff ? el("button", { type: "button", class: "linkbtn", onclick: () => { yearSel.value = String(anaYear); S.gdpYear = yearSel.value; lookup(); } }, `Use ${anaYear}`) : null;
+        put(status, el("b", {}, "✓ Filled in automatically: "), `${countryName(src.country)}, ${src.year} · ${gdpBig(src.value)} ${src.cur}. `,
+          src.forced ? `Different currency from the statements (${CUR}); results mix currencies.` : stat === "match" ? `Same currency as the statements (${CUR}).` : `The statements don't say their currency; check it is ${gdpCurName(src.cur)}.`,
+          yearOff ? el("span", { class: "gdp-yr" }, ` GDP year ${src.year}, analysis year ${anaYear}. `, useYear) : null);
+        return;
+      }
+      if (src && src.kind === "manual" && S.gdp) {
+        cls("ok"); put(status, el("b", {}, "✓ Entered by hand: "), `${gdpBig(S.gdp * SC)}${CUR ? " " + CUR : ""}.`);
+        return;
+      }
+      cls("idle"); put(status, "Pick a country and a year: GDP is looked up and filled in automatically. Or type a value.");
     }
-    countrySel.addEventListener("change",()=>{S.gdpCountry=countrySel.value;lookupGDP();});
-    yearSel.addEventListener("change",()=>{S.gdpYear=yearSel.value;lookupGDP();});
-    confirm.addEventListener("change",renderPreview);
-    apply.addEventListener("click",()=>{
-      if(apply.disabled || !fetched || fetched.country!==countrySel.value || fetched.year!==yearSel.value)return;
-      // The manual input's units determine the display; S.gdp always uses statement scale.
-      S.gdp=fetched.value/SC;
-      showInput();showHint();
-      onChange();
+    function apply(res) {
+      S.gdp = res.value / SC; S.gdpSrc = res; pending = null;
+      S.gdpCountry = res.country; S.gdpYear = res.year; S.gdpSeries = res.series; // one GDP for every tab
+      showValue(); renderStatus(); onChange();
+    }
+    function clearLooked() {
+      if (S.gdpSrc && S.gdpSrc.kind === "wb") { S.gdp = null; S.gdpSrc = null; onChange(); }
+    }
+    async function lookup() {
+      const country = countrySel.value, year = yearSel.value, series = S.gdpSeries, req = ++fetchId;
+      pending = null;
+      if (!country || !year) { showValue(); renderStatus(); return; }
+      const key = gdpKey(series, country, year);
+      if (S.gdpSrc && S.gdpSrc.kind === "wb" && gdpKey(S.gdpSrc.series, S.gdpSrc.country, S.gdpSrc.year) === key) { showValue(); renderStatus(); return; }
+      let value = GDP_CACHE.get(key);
+      if (value === undefined) {
+        renderStatus(["busy", `Looking up ${countryName(country)} GDP for ${year}…`]);
+        const url = `https://api.worldbank.org/v2/country/${encodeURIComponent(country)}/indicator/${GDP_SERIES[series].code}?date=${encodeURIComponent(year)}&format=json&source=2`;
+        try {
+          const response = await fetch(url, { headers: { Accept: "application/json" } });
+          if (!response.ok) throw Error("World Bank API status " + response.status);
+          const data = await response.json();
+          const row = Array.isArray(data) && Array.isArray(data[1]) ? data[1].find((r) => r && String(r.date) === year && Number.isFinite(r.value)) : null;
+          value = row ? Number(row.value) : null;
+          GDP_CACHE.set(key, value);
+        } catch (err) {
+          if (req !== fetchId || !box.isConnected) return;
+          clearLooked(); showValue();
+          renderStatus(["warn", "The World Bank lookup is unavailable (no internet, or the API is down). Type a GDP value instead."]);
+          return;
+        }
+      }
+      if (req !== fetchId || !box.isConnected) return;
+      if (!(value > 0)) {
+        clearLooked(); showValue();
+        renderStatus(["warn", `The World Bank has no ${GDP_SERIES[series].name} for ${countryName(country)} in ${year}. Choose another year, or type a value.`]);
+        return;
+      }
+      const res = { kind: "wb", series, country, year, value, cur: series === "CD" ? "USD" : countryCur(country) };
+      if (gdpCurrencyStatus(res.cur) === "mismatch") { pending = res; clearLooked(); showValue(); renderStatus(); return; }
+      apply(res);
+    }
+    countrySel.addEventListener("change", () => { S.gdpCountry = countrySel.value; lookup(); });
+    yearSel.addEventListener("change", () => { S.gdpYear = yearSel.value; lookup(); });
+    unitSel.addEventListener("change", () => { S.gdpInputUnit = unitSel.value; showValue(); });
+    anywayBox.addEventListener("change", () => {
+      if (anywayBox.checked && pending) apply(Object.assign({}, pending, { forced: true }));
+      else if (!anywayBox.checked && S.gdpSrc && S.gdpSrc.forced) { pending = Object.assign({}, S.gdpSrc, { forced: false }); S.gdp = null; S.gdpSrc = null; showValue(); renderStatus(); onChange(); }
     });
-    unitSel.addEventListener("change",()=>{
-      S.gdpInputUnit=unitSel.value;
-      showInput();showHint();renderPreview();
-    });
-    const manualChange=()=>{
-      const value=Number(inp.value);
-      S.gdp=inp.value.trim()&&Number.isFinite(value)&&value>0 ? value*gdpUnitSize(unitSel.value)/SC : null;
-      S.gdpResult=null;
-      showHint();
-      onChange();
+    const typed = (final) => {
+      const t = valInp.value.trim(), v = E.parseNumber(t);
+      if (!t) { pending = null; S.gdp = null; S.gdpSrc = null; renderStatus(); onChange(); return; }
+      if (!(Number.isFinite(v) && v > 0)) { renderStatus(["warn", "Type GDP as a positive number, for example 19,506 with Billions selected."]); return; }
+      pending = null; S.gdp = (v * gdpUnitSize(unitSel.value)) / SC; S.gdpSrc = { kind: "manual" };
+      if (final) showValue();
+      renderStatus(); onChange();
     };
-    inp.addEventListener("change",manualChange);
-    inp.addEventListener("input",()=>{clearTimeout(inp._t);inp._t=setTimeout(manualChange,450);});
-    // Populate all supported World Bank countries; preloaded fallback works offline.
-    (async()=>{
-      try{
-        const res=await fetch("https://api.worldbank.org/v2/country?format=json&per_page=400");
-        if(!res.ok)throw Error("Country directory unavailable");
-        const j=await res.json();
-        if(!container.isConnected || !Array.isArray(j)||!Array.isArray(j[1]))return;
-        const loaded=j[1].filter(c=>c?.region?.value!=="Aggregates" && /^[A-Z]{3}$/.test(c.id||""))
-          .map(c=>[c.id,c.name,c.currencyUnit||""]).sort((a,b)=>a[1].localeCompare(b[1]));
-        if(loaded.length<80)return;
-        countries=loaded;fillCountries();
-        // Country metadata provides the precise WB local currency label.
-        if(fetched)renderPreview();
-      }catch(err){} // compact fallback selector remains available.
-    })();
-    lookupGDP();
-    return container;
+    valInp.addEventListener("change", () => { clearTimeout(valInp._t); typed(true); });
+    valInp.addEventListener("input", () => { clearTimeout(valInp._t); valInp._t = setTimeout(() => typed(false), 600); });
+    // another tab may have changed GDP since this field was built: showTab calls this to bring it up to date
+    box._sync = () => {
+      countrySel.value = S.gdpCountry || ""; yearSel.value = String(S.gdpYear || anaYear); unitSel.value = S.gdpInputUnit || "billion";
+      seriesSeg.querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-pressed", String(["CN", "CD"][i] === S.gdpSeries)));
+      renderSource();
+      if (S.gdpSrc && S.gdpSrc.kind === "manual") { pending = null; showValue(); renderStatus(); }
+      else lookup(); // from the cache: shows the applied GDP, or holds back one in another currency
+    };
+    renderSource();
+    // the country and year already chosen (or the data's own Country column) fill GDP in straight away
+    if (S.gdpSrc && S.gdpSrc.kind === "manual") { showValue(); renderStatus(); }
+    else lookup();
+    return box;
   }
   pages.efc = {
     build(root) {
@@ -1540,8 +1667,10 @@
       root.replaceChildren(
         pageHead("FISCAL EXPOSURE", "Expected Fiscal Cost", "EFC = PD × EAD × LGD — PD from each SOE's own Z-EM-derived rating (20-band cohort table), EAD a share of total liabilities or the reported guaranteed debt, LGD set by you. A triage-level estimate, not a budget forecast. This is where SOEs are added up: from each SOE's actual latest accounts, not under a shock."),
         H.strip,
-        el("div", { class: "grid" }, el("div", { class: "s4 sticky-panel" }, settings.root), el("div", { class: "s8 stack" }, H.bar.root)),
-        el("div", { class: "grid", style: "margin-top:16px" }, el("div", { class: "s7" }, H.sens.root), el("div", { class: "s5" }, ref.root), el("div", { class: "s12" }, H.table.root)),
+        // settings on the left; on the right the two bar charts side by side, the LGD calibration under them; results full width below
+        el("div", { class: "grid" }, el("div", { class: "s4 sticky-panel" }, settings.root),
+          el("div", { class: "s8 stack" }, el("div", { class: "grid efc-pair" }, el("div", { class: "s6" }, H.bar.root), el("div", { class: "s6" }, H.sens.root)), ref.root)),
+        el("div", { class: "grid", style: "margin-top:16px" }, el("div", { class: "s12" }, H.table.root)),
         el("div", { class: "foot" }, el("div", {}, el("b", {}, "Triage-level estimate. "), "PD is each SOE's own one-year PD from the rating cohort table — a placeholder pending probit-estimated probabilities. EAD is a proxy (a share of total liabilities) unless the data report government-guaranteed debt and that basis is selected; the table's EAD column says which each SOE used.")));
     },
     render() {
@@ -2152,8 +2281,9 @@
       H.tblFold = fold(st.open, "r-tables", "Background data: year-by-year tables and downloads", [el("div", { class: "stack" }, H.imp.root, H.proj.root)], again);
       H.wfsFold = fold(st.open, "r-wfs", "Payment-priority scenarios and sensitivity (Senegal case)", [H.wfs.root], again);
       [H.cashFold, H.tblFold, H.wfsFold].forEach((d) => d.classList.add("card", "res-fold"));
-      H.out.replaceChildren(H.subsidy, H.trans.root, el("div", { class: "grid" }, el("div", { class: "s6" }, H.bz.root), el("div", { class: "s6" }, H.be.root)),
-        el("div", { class: "grid" }, el("div", { class: "s6" }, H.z.root), el("div", { class: "s6" }, H.e.root)), H.cashFold, H.tblFold, H.wfsFold);
+      // paths first (how the score and the cost evolve), then the final-year bridges that explain them
+      H.out.replaceChildren(H.subsidy, H.trans.root, el("div", { class: "grid" }, el("div", { class: "s6" }, H.z.root), el("div", { class: "s6" }, H.e.root)),
+        el("div", { class: "grid" }, el("div", { class: "s6" }, H.bz.root), el("div", { class: "s6" }, H.be.root)), H.cashFold, H.tblFold, H.wfsFold);
     },
     buildMacro() {
       const st = S.sh, H = this.H;

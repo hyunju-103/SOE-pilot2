@@ -986,7 +986,7 @@
   });
   /* ---------- tool map: every tab, what it answers, what to set ---------- */
   const HW_MAP = [
-    ["home", "Home", "What data am I using?", "The loaded portfolio: how many SOEs are in distress, the headline costs, data quality.", [["set", "Upload your file, or pick a built-in example"], ["set", "Download the template and dictionary to prepare your data"]]],
+    ["home", "Home", "What data am I using?", "The start screen: load data, then four questions with today's answers (SOEs in trouble, cost to the budget, shocks, signals). Data quality and the column mapping are under About the tool and your data.", [["set", "Upload your file, or pick a built-in example"], ["set", "Download the template and dictionary to prepare your data (About)"]]],
     ["kpi", "KPI Dashboard", "Is each SOE healthy, and why not?", "Ratios in four groups, coloured green, amber or red; one SOE's trend, or SOEs side by side.", [["set", "View, years and SOE"], ["adv", "Red / amber / green cut-offs are illustrative (Technical notes)"]]],
     ["altman", "Distress Indicator", "How close is each SOE to distress?", "The four health checks, the distress score and its zone, an indicative rating.", [["set", "SOE and period"], ["def", "Weights and zone cut-offs: leave as they are"]]],
     ["efc", "Expected Fiscal Cost", "What could each SOE cost the budget?", "PD × EAD × LGD for each SOE and the portfolio, as money and as a share of GDP.", [["set", "Share the government bears (LGD), share of debt at stake (EAD), GDP"], ["def", "Chance of distress per rating step: placeholder values"]]],

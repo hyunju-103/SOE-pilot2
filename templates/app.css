@@ -696,25 +696,38 @@ body{background:var(--bg);}
 .mc-settings-accordion > summary {padding-block:10px!important;}
 .mc-settings-toggle{min-height:0; padding:0!important;}
 /* GDP lookup and unit-aware controls (the selected unit is always explicit). */
-.gdp-control {display:grid;gap:8px;min-width:0;}
-.gdp-lookup {border:1px solid var(--line);border-radius:5px;padding:10px;background:var(--surface-2);display:grid;gap:7px;}
-.gdp-lookup-label {font-size:12px;font-weight:700;color:var(--heading);}
-.gdp-lookup-grid {display:grid;grid-template-columns:minmax(0,1.5fr) minmax(100px,1fr);gap:7px;}
+/* Country GDP: series (LCU / US$) → country and year → value filled in automatically → units */
+.gdp-control {display:grid;gap:8px;min-width:0;border:1px solid var(--line);border-radius:9px;padding:10px 11px;background:var(--surface-2);}
+.gdp-control > .lbl {margin-bottom:1px;}
+.gdp-step {display:grid;gap:4px;min-width:0;}
+.gdp-sub {font-size:11px;font-weight:600;color:var(--ink-2);}
+.gdp-series {justify-self:start;max-width:100%;}
+.gdp-series button {padding:4px 11px;min-height:28px;font-size:12px;}
+.gdp-lookup-grid {display:grid;grid-template-columns:minmax(0,1.5fr) minmax(84px,1fr);gap:7px;}
 .gdp-lookup-grid label {display:grid;gap:3px;font-size:11px;font-weight:600;color:var(--ink-2);}
-.gdp-lookup-grid select {min-width:0;width:100%;padding:5px 7px;font-size:12px;}
-.gdp-preview {font-size:12px;line-height:1.5;color:var(--ink);overflow-wrap:anywhere;}
-.gdp-preview b {font-weight:700;color:var(--heading)}
-.gdp-source {font-size:11px;color:var(--ink-2);}
+.gdp-lookup-grid select {min-width:0;width:100%;padding:5px 7px;font-size:12.5px;}
+.gdp-value {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:stretch;}
+.gdp-value input {min-width:0;width:100%;font-size:14px;font-weight:700;color:var(--heading);font-variant-numeric:tabular-nums;padding:6px 8px;background:var(--surface);}
+.gdp-value input.held {color:var(--ink-2);font-weight:600;border-color:var(--warn);border-style:dashed;}
+.gdp-value select {font-size:12px;max-width:150px;}
+.gdp-status {font-size:11.5px;line-height:1.5;color:var(--ink-2);overflow-wrap:anywhere;padding:6px 8px;border-radius:6px;background:var(--surface);border:1px solid var(--line);}
+.gdp-status.ok {border-color:transparent;background:var(--good-wash);color:var(--ink);}
+.gdp-status.ok b {color:var(--good-ink);}
+.gdp-status.warn {border-color:transparent;background:var(--warn-wash-soft);color:var(--ink);}
+.gdp-status.warn b {color:var(--warn-ink);}
+.gdp-status.busy {color:var(--muted);font-style:italic;}
+.gdp-status .linkbtn {font:inherit;font-weight:700;color:var(--accent-strong);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;}
+.gdp-source {font-size:11px;color:var(--muted);}
 .gdp-source a {color:var(--accent-strong);}
-.gdp-confirm {display:flex;align-items:flex-start;gap:6px;font-size:11.5px;color:var(--ink-2);}
+.gdp-control > .gdp-confirm {display:flex;justify-content:flex-start;align-items:flex-start;gap:6px;font-size:11.5px;font-weight:400;color:var(--ink-2);}
+.gdp-confirm[hidden] {display:none;}
 .gdp-confirm input {margin:2px 0 0;}
-.gdp-lookup .btn {justify-self:start;font-size:11.5px;padding:5px 10px;}
-.gdp-lookup .btn[disabled] {opacity:.5;cursor:not-allowed;}
-.gdp-manual {display:grid;gap:6px;}
-.gdp-manual .unit-label {font-weight:600;font-size:11px;color:var(--ink-2);}
-.gdp-manual select {max-width:100%;font-size:12px;}
-.gdp-manual input {width:100%;}
 @media(max-width:440px){.gdp-lookup-grid{grid-template-columns:1fr}}
+/* Expected Fiscal Cost: the two bar charts share a row inside the right-hand column */
+.efc-pair {gap:16px;}
+.efc-pair > .s6 > .card {height:100%;}
+.efc-pair {align-items:stretch;}
+@media (max-width: 1180px) { .efc-pair > .s6 { grid-column: span 12; } }
 
 /* =====================================================================
    Meeting 2026-10-26 additions: Home workflow and scope, Shock Scenarios
@@ -1060,3 +1073,59 @@ body[data-tab="how"] { background: #f3f6f8; }
   .hw *, .hw *::before, .hw *::after, .sk [data-k], .sk-card { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-delay: 0s !important; transition-delay: 0s !important; }
 }
 @media print { .hw-rail, .hw-stage { position: static; } }
+
+/* === Start screen (Home): one question, one upload box, four questions with today's answers === */
+.lp { max-width: 1040px; margin: 0 auto; padding: clamp(28px, 7vh, 76px) 0 28px; text-align: center; }
+.lp-title { font-family: "Overpass", "Segoe UI", Arial, sans-serif; font-weight: 800; font-size: clamp(30px, 4.2vw, 46px); line-height: 1.08; letter-spacing: -.02em; color: var(--heading); margin: 0; }
+.lp-lede { max-width: 60ch; margin: 14px auto 0; font-size: 15.5px; line-height: 1.55; color: var(--ink-2); text-wrap: balance; }
+.lp-box { position: relative; max-width: 720px; margin: 30px auto 0; }
+.lp-search { display: flex; align-items: center; gap: 14px; padding: 9px 9px 9px 20px; border: 1px solid var(--axis); border-radius: 999px; background: var(--surface); box-shadow: 0 1px 4px rgba(0, 34, 68, .07); cursor: pointer; text-align: left; transition: box-shadow .15s ease, border-color .15s ease; }
+.lp-search:hover, .lp-box:focus-within .lp-search { box-shadow: 0 3px 16px rgba(0, 34, 68, .16); border-color: transparent; }
+.lp-box:focus-within .lp-search { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lp-search.over { border: 2px dashed var(--accent); background: var(--accent-wash); }
+.lp-search.flash { animation: flash 1.2s ease; }
+.lp-ico { flex: none; color: var(--accent-strong); }
+.lp-ph { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.lp-ph b { font-size: 15px; font-weight: 600; color: var(--ink); }
+.lp-ph span { font-size: 12.5px; color: var(--muted); }
+.lp-pick { flex: none; background: var(--accent-strong); color: var(--surface); font-weight: 700; font-size: 13.5px; border-radius: 999px; padding: 10px 20px; white-space: nowrap; }
+.lp-search:hover .lp-pick { filter: brightness(1.08); }
+.lp-try { margin: 14px 0 0; font-size: 13px; color: var(--ink-2); }
+.lp-ds { font: inherit; color: var(--accent-strong); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.lp-ds[aria-pressed="true"] { color: var(--heading); font-weight: 700; text-decoration: none; cursor: default; }
+.lp-ds:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.lp-loaded { max-width: 720px; margin: 12px auto 0; font-size: 12.5px; color: var(--good-ink); }
+.lp-loaded a { font-weight: 600; }
+.lp-msg { max-width: 720px; margin: 0 auto; text-align: left; }
+.lp-now { margin: clamp(36px, 7vh, 64px) 0 12px; font-size: 13px; color: var(--muted); }
+.lp-now b { color: var(--ink); font-weight: 600; }
+.lp-qs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); text-align: left; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.lp-q { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px 16px; color: inherit; text-decoration: none; border-left: 1px solid var(--line); min-width: 0; }
+.lp-q:first-child { border-left: 0; }
+.lp-q:hover { background: var(--surface-2); }
+.lp-q:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.lp-q-ask { font-size: 13.5px; font-weight: 600; color: var(--ink-2); }
+.lp-q-val { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.lp-q-val b { font-family: "Overpass", "Segoe UI", Arial, sans-serif; font-size: 34px; font-weight: 800; line-height: 1; letter-spacing: -.01em; color: var(--heading); }
+.lp-q-val small { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.lp-q-sub { font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.lp-zones { display: flex; gap: 2px; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.lp-q-sub { display: block; }
+.lp-zones .z-d { background: var(--crit); } .lp-zones .z-g { background: var(--warn); } .lp-zones .z-s { background: var(--good); }
+.lp-q-go { margin-top: auto; padding-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--accent-strong); }
+/* the four cards share their row heights, so the answers sit on one line even when a question wraps */
+@supports (grid-template-rows: subgrid) {
+  .lp-qs { grid-template-rows: auto auto 1fr auto; row-gap: 0; }
+  .lp-q { display: grid; grid-row: span 4; grid-template-rows: subgrid; gap: 6px; }
+  .lp-q-ask { align-self: start; } .lp-q-sub { align-self: start; }
+}
+.lp-q:hover .lp-q-go { text-decoration: underline; }
+.lp-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 22px; margin-top: 22px; font-size: 13px; }
+.lp-links a { color: var(--ink-2); }
+.lp-links a:hover { color: var(--accent-strong); }
+@media (max-width: 900px) { .lp-qs { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lp-q:nth-child(3) { border-left: 0; } .lp-q:nth-child(n+3) { border-top: 1px solid var(--line); } }
+@media (max-width: 560px) {
+  .lp-qs { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; } .lp-q { border-left: 0; display: flex; grid-row: auto; } .lp-q + .lp-q { border-top: 1px solid var(--line); }
+  .lp-search { padding-left: 14px; gap: 10px; } .lp-ph span { display: none; } .lp-ph b { font-size: 13.5px; } .lp-pick { padding: 9px 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .lp-search { transition: none; } .lp-search.flash { animation: none; } }
