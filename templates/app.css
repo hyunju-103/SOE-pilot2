@@ -1224,3 +1224,21 @@ body[data-tab="how"] { background: #f3f6f8; }
 .lp-folds .tbl-wrap { max-width: 100%; }
 .lp-folds th, .lp-folds td { white-space: nowrap; }
 .lp-folds td:first-child { white-space: normal; min-width: 250px; max-width: 280px; }
+
+/* start screen: the tool's purpose, method and limits under the headline, in a reading-width column */
+.lp-intro { max-width: 74ch; margin: 18px auto 0; }
+.lp-intro p { margin: 0 0 12px; font-size: 15px; line-height: 1.65; color: var(--ink-2); }
+.lp-intro p:last-child { margin-bottom: 0; }
+/* "More" / "Less" reads as part of the text: light grey, the paragraph's own size, no button look */
+.lp-more { font: inherit; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; white-space: nowrap; }
+.lp-more:hover { color: var(--ink-2); text-decoration-color: currentColor; }
+.lp-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.lp-more-text[hidden] { display: none; }
+.lp-intro .lp-more-text { margin-bottom: 4px; }
+/* start screen, wide intro: the text runs the full content width (the same edges as the sections below),
+   and the headline sits on one line, so the upload box reaches the first screen */
+.lp { padding-top: clamp(16px, 3vh, 32px); }
+.lp-title { max-width: none; font-size: clamp(26px, 2.9vw, 38px); }
+.lp-intro { max-width: none; margin-top: 14px; }
+.lp-intro p { font-size: 14.5px; line-height: 1.6; margin-bottom: 8px; }
+.lp-split > .lp-sec { margin-top: 18px; }
