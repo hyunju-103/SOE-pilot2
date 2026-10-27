@@ -3398,7 +3398,7 @@ body[data-tab="how"] { background: #f3f6f8; }
         el("nav", { class: "lp-links", "aria-label": "More" }, go("how", "How it works, step by step"), go("report", "Report"), go("about", "About the tool and your data"))));
     },
     render() {
-      const H = this.H, all = allRows(), rows = latestOf(all), n = rows.length, zc = zoneCounts(rows); 
+      const H = this.H, all = allRows(), rows = latestOf(all), n = rows.length, zc = zoneCounts(rows);
       const st = standardStress(all), stress = Object.fromEntries(st.map((x) => [x.row.Entity, x]));
       const total = sum(rows.map((r) => E.efcRow(r, S.efc.lgd, S.efc.ead, S.efc.basis).EFC));
       const drops = st.filter((x) => x.drop).length;
