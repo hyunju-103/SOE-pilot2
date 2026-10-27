@@ -1019,7 +1019,7 @@
       /* 3. what the tool finds in the data on screen: four questions with today's answers */
       H.qs = el("div", { class: "lp-qs" });
       root.replaceChildren(el("div", { class: "lp" },
-        el("h2", { class: "lp-title" }, "Analyze the fiscal risk of your state-owned enterprises"),
+        el("h2", { class: "lp-title" }, "About this tool..."),
         // the tool's purpose, method and limits, as written by the team (paragraph breaks added for reading)
         el("div", { class: "lp-intro" },
           el("p", {}, ...moreText(
