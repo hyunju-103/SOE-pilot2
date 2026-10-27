@@ -1241,3 +1241,5 @@ body[data-tab="how"] { background: #f3f6f8; }
 .lp-intro { max-width: none; margin-top: 14px; }
 .lp-intro p { font-size: 14.5px; line-height: 1.6; margin-bottom: 8px; }
 .lp-split > .lp-sec { margin-top: 18px; }
+/* the headline sits on the same left edge as the intro and the sections below */
+.lp-title { text-align: left; margin-left: 0; margin-right: 0; }
