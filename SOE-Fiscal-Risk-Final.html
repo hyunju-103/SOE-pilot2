@@ -1184,6 +1184,53 @@ body[data-tab="how"] { background: #f3f6f8; }
 }
 @media (prefers-reduced-motion: reduce) { .lp-search, .lp-drop { transition: none; } .lp-drop.flash { animation: none; } }
 
+/* Start screen, two columns: load data on the left, what the tool finds on the right */
+.lp { max-width: 1180px; }
+.lp-split { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); gap: 0 28px; align-items: start; }
+.lp-split > .lp-sec { margin-top: 30px; min-width: 0; }
+.lp-split .lp-h { margin-bottom: 10px; }
+.lp-split .lp-drop { padding: 14px 14px 10px; border-radius: 12px; }
+.lp-split .lp-search { padding: 7px 7px 7px 16px; gap: 12px; }
+.lp-split .lp-ph b { font-size: 14.5px; }
+.lp-split .lp-pick { padding: 9px 16px; font-size: 13px; }
+.lp-split .lp-drop-note { margin-top: 8px; font-size: 11.5px; max-width: none; }
+.lp-split .lp-data { margin-top: 10px; gap: 7px; padding: 4px 14px 12px; }
+.lp-folds { display: grid; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 3px; }
+.lp-folds > details.plain { margin: 6px 0 0; }
+.lp-split .lp-data-lbl { width: 128px; }
+.lp-split .lp-data-row { font-size: 12.5px; }
+.lp-split .lp-chip { padding: 3px 10px; font-size: 12px; }
+/* the four answers as a 2 × 2 grid */
+.lp-split .lp-qs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.lp-split .lp-q { padding: 14px 16px 12px; gap: 4px; }
+.lp-split .lp-q:nth-child(3) { border-left: 0; }
+.lp-split .lp-q:nth-child(n+3) { border-top: 1px solid var(--line); }
+.lp-split .lp-q-ask { font-size: 13px; }
+.lp-split .lp-q-val b { font-size: 30px; }
+.lp-split .lp-q-sub { font-size: 12px; }
+.lp-split .lp-q-go { padding-top: 6px; font-size: 12px; }
+@supports (grid-template-rows: subgrid) {
+  .lp-split .lp-qs { grid-template-rows: auto auto 1fr auto auto auto 1fr auto; }
+  .lp-split .lp-q { gap: 4px; }
+}
+@media (max-width: 1000px) { .lp-split { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) {
+  .lp-split .lp-qs { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .lp-split .lp-q:nth-child(n) { border-left: 0; } .lp-split .lp-q + .lp-q { border-top: 1px solid var(--line); }
+}
+
+.lp-folds > details.plain > summary { list-style-position: inside; }
+.lp-split .lp-data-row { display: grid; grid-template-columns: 128px minmax(0, 1fr); align-items: baseline; gap: 4px 10px; }
+.lp-split .lp-data-lbl { width: auto; }
+.lp-data-val { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; }
+/* the right column runs as tall as the left one */
+.lp-split { align-items: stretch; }
+.lp-split > .lp-sec { display: flex; flex-direction: column; }
+.lp-split > .lp-sec > .lp-qs { flex: 1; }
+@media (max-width: 560px) { .lp-split .lp-data-row { grid-template-columns: minmax(0, 1fr); } }
+/* an open fold (column list, data preview) makes the left column long: the answers then keep their own height */
+.lp-split:has(.lp-folds details[open]) { align-items: start; }
+
 </style>
 
 <header class="band">
@@ -3212,7 +3259,7 @@ body[data-tab="how"] { background: #f3f6f8; }
           el("li", {}, go("kpi", "KPI Dashboard"), " : profitability, liquidity, solvency and fiscal-dependency ratios against illustrative thresholds; trend per SOE and comparison across SOEs."),
           el("li", {}, go("altman", "Distress Indicator"), " : one distress score per SOE (Altman Z″-EM) from four health checks, with its zone (safe, grey, distress) and an indicative rating."),
           el("li", {}, go("efc", "Expected Fiscal Cost"), " : PD × EAD × LGD for each SOE and the portfolio, from the latest accounts. This is where SOEs are added up."),
-          el("li", {}, go("shock", "Shock Scenarios"), " : one SOE under a fuel, exchange-rate, interest-rate, revenue or arrears shock; a range of outcomes; a portfolio macro shock that ranks SOEs; and a check of the model against past years."),
+          el("li", {}, go("shock", "Shock Scenarios"), " : one SOE under a fuel, exchange-rate, interest-rate, revenue or arrears shock; a Monte Carlo simulation of the range of outcomes; a portfolio macro shock that ranks SOEs; and a check of the model against past years."),
           el("li", {}, go("warning", "Early Warning"), " : trigger rules, grouped by issue, and the follow-up each signal calls for."),
           el("li", {}, go("report", "Report"), " : everything above as a five-section report, ready to print.")),
         el("p", { class: "note" }, "For analysts: every coefficient and default, with its source and status, is in the ", go("assumptions", "Technical notes"), ". Every calculation runs in this page with the same formulas and config.py values as the Python tool."),
@@ -3274,12 +3321,12 @@ body[data-tab="how"] { background: #f3f6f8; }
       drop.addEventListener("dragleave", (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("over"); });
       drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]); });
       const loaded = S.key === "upload" && S.uploadNote ? el("p", { class: "lp-loaded" }, S.uploadNote) : null;
-      const folds = el("div", { class: "card upl-more-card lp-folds" }, S.mapping ? mappingDetails(S.mapping) : null, ...pages.about.dataDetails());
+      const folds = el("div", { class: "lp-folds" }, S.mapping ? mappingDetails(S.mapping) : null, ...pages.about.dataDetails());
       // "Now showing", the built-in datasets and the template, in three short lines
       const copyOf = DATASETS.report ? ["sample", "demo", "long"].find((k) => DATASETS[k] && DATASETS[k].label === DATASETS.report.label) : null;
       const active = S.key === "report" && copyOf ? copyOf : S.key;
       const ds = (key, label, sub) => DATASETS[key] ? el("button", { type: "button", class: "lp-chip", "aria-pressed": String(active === key), title: sub,
-        onclick: () => loadDataset(DATASETS[key].rows, DATASETS[key].label, DATASETS[key].example, key) }, label, el("small", {}, sub)) : null;
+        onclick: () => loadDataset(DATASETS[key].rows, DATASETS[key].label, DATASETS[key].example, key) }, label) : null;
       const fileBtn = (label, name, getText) => {
         const b = el("button", { type: "button", class: "lp-chip" }, (canDownload ? "⬇ " : "Copy ") + label);
         b.addEventListener("click", async () => {
@@ -3289,14 +3336,14 @@ body[data-tab="how"] { background: #f3f6f8; }
         return b;
       };
       const yrs = S.years.length > 1 ? `${S.years[0]}–${last(S.years)}` : String(S.years[0] ?? "");
-      const data = el("div", { class: "lp-data" },
+      const data = el("div", { class: "lp-data" }, folds,
         el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Now showing"),
-          el("b", {}, S.label || "Loaded data"), el("span", { class: "muted" }, `${pl(S.names.length, "SOE")}, ${S.rows.length} SOE-year rows, ${yrs}`)),
+          el("span", { class: "lp-data-val" }, el("b", {}, S.label || "Loaded data"), el("span", { class: "muted" }, `${pl(S.names.length, "SOE")}, ${S.rows.length} SOE-year rows, ${yrs}`))),
         el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Or try built-in data"),
-          DATASETS.report && !copyOf ? ds("report", "Report data", DATASETS.report.label) : null,
-          ds("sample", "Example", "SOE A and B"), ds("demo", "Demo portfolio", "8 SOEs"), ds("long", "Long panel", "30 SOEs")),
+          el("span", { class: "lp-data-val" }, DATASETS.report && !copyOf ? ds("report", "Report data", DATASETS.report.label) : null,
+            ds("sample", "Example", "SOE A and B, 2020–2024"), ds("demo", "Demo portfolio", "8 SOEs in 7 sectors"), ds("long", "Long panel", "30 SOEs, 20 years"))),
         el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Standard template"),
-          fileBtn("Template (CSV)", "soe_tool_template.csv", templateCSV), fileBtn("Dictionary (CSV)", "soe_variable_dictionary.csv", dictionaryCSV)));
+          el("span", { class: "lp-data-val" }, fileBtn("Template (CSV)", "soe_tool_template.csv", templateCSV), fileBtn("Dictionary (CSV)", "soe_variable_dictionary.csv", dictionaryCSV))));
 
       /* 3. what the tool finds in the data on screen: four questions with today's answers */
       H.qs = el("div", { class: "lp-qs" });
@@ -3304,8 +3351,10 @@ body[data-tab="how"] { background: #f3f6f8; }
         el("h2", { class: "lp-title" }, "Analyze the fiscal risk of your state-owned enterprises"),
         el("p", { class: "lp-lede" }, "Upload the yearly accounts of a country's non-financial SOEs to see which are in financial distress, what they could cost the government budget, and how a shock would change that."),
         el("section", { class: "lp-sec", "aria-labelledby": "lp-h-calc" }, el("h3", { class: "lp-h", id: "lp-h-calc" }, "What the tool calculates"), steps, scope),
-        el("section", { class: "lp-sec", "aria-labelledby": "lp-h-load" }, el("h3", { class: "lp-h", id: "lp-h-load" }, "Load data"), drop, loaded, msg, folds, data),
-        el("section", { class: "lp-sec", "aria-labelledby": "lp-h-find" }, el("h3", { class: "lp-h", id: "lp-h-find" }, "What the tool finds in this data"), H.qs),
+        // load data on the left, what the tool finds on the right
+        el("div", { class: "lp-split" },
+          el("section", { class: "lp-sec", "aria-labelledby": "lp-h-load" }, el("h3", { class: "lp-h", id: "lp-h-load" }, "Load data"), drop, loaded, msg, data),
+          el("section", { class: "lp-sec", "aria-labelledby": "lp-h-find" }, el("h3", { class: "lp-h", id: "lp-h-find" }, "What the tool finds in this data"), H.qs)),
         el("nav", { class: "lp-links", "aria-label": "More" }, go("how", "How it works, step by step"), go("report", "Report"), go("about", "About the tool and your data"))));
     },
     render() {
@@ -4294,7 +4343,7 @@ body[data-tab="how"] { background: #f3f6f8; }
         el("p", { class: "note", style: "margin-top:6px" }, "The shock, the year it hits and its size are set on the right. The projection runs from the year before the shock to the last year in the data."));
       const panel = view === "macro" ? [macroNote, c2, c4] : view === "backtest" ? [c1, btNote, c2] : [c1, c2, c3, c4, adv];
 
-      H.view = seg([["single", "One SOE"], ["mc", "Range of outcomes"], ["macro", "Portfolio macro shock"], ["backtest", "Model check"]], view === "all" ? "macro" : view, (v) => { st.view = v; rebuild(); }, "View");
+      H.view = seg([["single", "One SOE"], ["mc", "Monte Carlo simulation"], ["macro", "Portfolio macro shock"], ["backtest", "Model check"]], view === "all" ? "macro" : view, (v) => { st.view = v; rebuild(); }, "View");
       H.desc = el("p", { class: "note", style: "margin:8px 0 0" });
       H.strip = statStrip();
       H.out = el("div", { class: "stack", style: "margin-top:16px" });
@@ -6000,7 +6049,7 @@ body[data-tab="how"] { background: #f3f6f8; }
         ["kpi", [hwB("2 · KPI Dashboard: is each SOE healthy? "), "Familiar ratios in four groups (profitability, liquidity, solvency, dependence on the government), each coloured green, amber or red. Use it to see ", el("i", {}, "why"), ` an SOE looks weak. On the four ratios shown here there are ${reds} red signals across ${pl(c.n, "SOE")}.`, el("br"), hwOpen("kpi")]],
         ["altman", [hwB("3 · Distress Indicator: one score per SOE. "), `Four health checks combine into a distress score that falls in a safe, grey or distress zone (chapters 4 to 6 show how). Today: ${c.zc.Distress} in distress, ${c.zc.Grey} grey, ${c.zc.Safe} safe.`, el("br"), hwOpen("altman")]],
         ["efc", [hwB("4 · Expected Fiscal Cost: what could it cost the budget? "), `Chance of distress × debt at stake × the share the government bears (chapter 7). This is the only tab that adds SOEs up: ${money(tot, true)} in total, ${pct(tot ? sum(efcs.slice(0, 3)) / tot : NaN, 0)} of it from the three largest.`, el("br"), hwOpen("efc")]],
-        ["shock", [hwB("5 · Shock Scenarios: what could make it worse? "), "Pick an SOE and a shock (fuel, exchange rate, interest rates, revenue, arrears) and compare with its no-shock path. Four views: one SOE; a range of outcomes; a portfolio-wide shock that ranks SOEs; and a check of the model against past years (chapters 8 to 10).", el("br"), hwOpen("shock")]],
+        ["shock", [hwB("5 · Shock Scenarios: what could make it worse? "), "Pick an SOE and a shock (fuel, exchange rate, interest rates, revenue, arrears) and compare with its no-shock path. Four views: one SOE; a Monte Carlo simulation of the range of outcomes; a portfolio-wide shock that ranks SOEs; and a check of the model against past years (chapters 8 to 10).", el("br"), hwOpen("shock")]],
         ["warning", [hwB("6 · Early Warning: what should happen next? "), `Simple rules turn the numbers into a signal for each SOE (Alert, Watch or Good) with follow-up steps for the ministry. Today: ${lv("alert")} alert, ${lv("watch")} watch, ${lv("ok")} good (chapter 11).`, el("br"), hwOpen("warning")]],
         ["report", [hwB("7 · Report: the write-up. "), "Five sections generated from everything above (summary, performance, distress and fiscal risk, stress tests, policy), ready to print or save as PDF. Check the numbers in the tabs before you use it in a briefing.", el("br"), hwOpen("report")]],
         ["loop", ["Then the line starts again: ", hwB("new accounts each year, the same seven stops."), " That repetition is the monitoring part of the early-warning framework. An SOE it flags, for example a power utility, goes to a deeper model (the energy-sector fiscal-risk model) for a closer look."]],
@@ -6513,7 +6562,7 @@ body[data-tab="how"] { background: #f3f6f8; }
         ["cloud", [hwB("Monte Carlo simulation"), ` tries many sizes. The tool draws ${m.pts.length} random combinations of fuel and currency shocks around the standard stress. Each dot is one `, hwB("draw"), ": one possible future. Most are close to the standard sizes, a few are extreme, and fuel and the currency tend to move together."]],
         ["run", [`The tool runs ${r.Entity}'s accounts through each future, exactly as in chapter 8, and records the expected fiscal cost in the final year. Darker dots are futures that cost more.`]],
         ["hist", ["Stack the futures by their cost and you get a spread of outcomes. The middle one, the ", hwB("median (P50)"), ", is ", hwB(money(m.p50, true)), "."]],
-        ["p95", ["One future in twenty comes out worse than ", hwB(money(m.p95, true)), ". That is the ", hwB("P95"), ", sometimes called fiscal-at-risk: a bad case, not a maximum. It is in Shock Scenarios › Range of outcomes."]],
+        ["p95", ["One future in twenty comes out worse than ", hwB(money(m.p95, true)), ". That is the ", hwB("P95"), ", sometimes called fiscal-at-risk: a bad case, not a maximum. It is in Shock Scenarios › Monte Carlo simulation."]],
         ["caution", [hwB("Be careful with P95. "), `It is still an `, el("i", {}, "expected"), ` cost, averaged over the chance of distress. It shows how high the expected bill gets when the shock turns out bad. It is `, hwB("not"), ` the bill if ${r.Entity} actually fails. Inside the simulation the chance of distress comes from a smooth curve instead of the rating steps, so small changes count; that is why its numbers can differ from the other tabs.`]],
       ];
     },
@@ -6681,7 +6730,7 @@ body[data-tab="how"] { background: #f3f6f8; }
     ["kpi", "KPI Dashboard", "Is each SOE healthy, and why not?", "Ratios in four groups, coloured green, amber or red; one SOE's trend, or SOEs side by side.", [["set", "View, years and SOE"], ["adv", "Red / amber / green cut-offs are illustrative (Technical notes)"]]],
     ["altman", "Distress Indicator", "How close is each SOE to distress?", "The four health checks, the distress score and its zone, an indicative rating.", [["set", "SOE and period"], ["def", "Weights and zone cut-offs: leave as they are"]]],
     ["efc", "Expected Fiscal Cost", "What could each SOE cost the budget?", "PD × EAD × LGD for each SOE and the portfolio, as money and as a share of GDP.", [["set", "Share the government bears (LGD), share of debt at stake (EAD), GDP"], ["def", "Chance of distress per rating step: placeholder values"]]],
-    ["shock", "Shock Scenarios", "What could make it worse?", "One SOE against its no-shock path; a range of outcomes; a portfolio ranking under one broad shock; a check of the model against past years.", [["set", "SOE, then the shock type and its size"], ["def", "Structural factors when you have no data for them"], ["adv", "Cash financing, tariffs and collections, payment priority, PD method"]]],
+    ["shock", "Shock Scenarios", "What could make it worse?", "One SOE against its no-shock path; a Monte Carlo simulation; a portfolio ranking under one broad shock; a check of the model against past years.", [["set", "SOE, then the shock type and its size"], ["def", "Structural factors when you have no data for them"], ["adv", "Cash financing, tariffs and collections, payment priority, PD method"]]],
     ["warning", "Early Warning", "What should happen next?", "A signal for each SOE, the rules grouped by issue, and an action plan with follow-up steps.", [["set", "Issue filter, and the SOE to look at"], ["adv", "Rules and steps are examples, to agree with the ministry"]]],
     ["report", "Report", "How do I brief on it?", "Five automatically written sections from everything above.", [["set", "The stress channel and SOE for the charts"], ["set", "Print or save as PDF"]]],
     ["assumptions", "Technical notes (for analysts)", "Where does each number come from?", "Every coefficient, threshold and default with its source and status, and the data dictionary.", [["adv", "Read before quoting results"]]],
@@ -6865,7 +6914,7 @@ body[data-tab="how"] { background: #f3f6f8; }
         ["Expected Fiscal Cost tab", `Today: latest accounts (${r.Year}), rating steps`, efc, "efc"],
         ["Shock Scenarios · no shock", `Year ${yN} if nothing goes wrong`, last(d.base).EFC, "shock"],
         ["Shock Scenarios · standard stress", `Year ${yN} under all six standard shocks`, last(d.path).EFC, "shock"],
-        ["Range of outcomes · median", `Year ${yN}, middle of many shock sizes, smooth curve`, m ? m.p50 : NaN, "shock"]].map(([w, q, v, id]) =>
+        ["Monte Carlo simulation · median", `Year ${yN}, middle of many shock sizes, smooth curve`, m ? m.p50 : NaN, "shock"]].map(([w, q, v, id]) =>
         el("div", { class: "hw-which-card" }, el("span", { class: "sk-k" }, w), el("b", { class: "num" }, money(v, true)), el("small", {}, q), go(id, "Open →")))),
         el("p", { class: "hw-intro" }, "If two numbers for the same SOE disagree, check which year they refer to, whether a shock is applied, and whether one of them is a Monte Carlo result."));
     },

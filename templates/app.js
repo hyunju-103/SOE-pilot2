@@ -918,7 +918,7 @@
           el("li", {}, go("kpi", "KPI Dashboard"), " : profitability, liquidity, solvency and fiscal-dependency ratios against illustrative thresholds; trend per SOE and comparison across SOEs."),
           el("li", {}, go("altman", "Distress Indicator"), " : one distress score per SOE (Altman Z″-EM) from four health checks, with its zone (safe, grey, distress) and an indicative rating."),
           el("li", {}, go("efc", "Expected Fiscal Cost"), " : PD × EAD × LGD for each SOE and the portfolio, from the latest accounts. This is where SOEs are added up."),
-          el("li", {}, go("shock", "Shock Scenarios"), " : one SOE under a fuel, exchange-rate, interest-rate, revenue or arrears shock; a range of outcomes; a portfolio macro shock that ranks SOEs; and a check of the model against past years."),
+          el("li", {}, go("shock", "Shock Scenarios"), " : one SOE under a fuel, exchange-rate, interest-rate, revenue or arrears shock; a Monte Carlo simulation of the range of outcomes; a portfolio macro shock that ranks SOEs; and a check of the model against past years."),
           el("li", {}, go("warning", "Early Warning"), " : trigger rules, grouped by issue, and the follow-up each signal calls for."),
           el("li", {}, go("report", "Report"), " : everything above as a five-section report, ready to print.")),
         el("p", { class: "note" }, "For analysts: every coefficient and default, with its source and status, is in the ", go("assumptions", "Technical notes"), ". Every calculation runs in this page with the same formulas and config.py values as the Python tool."),
@@ -980,12 +980,12 @@
       drop.addEventListener("dragleave", (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("over"); });
       drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]); });
       const loaded = S.key === "upload" && S.uploadNote ? el("p", { class: "lp-loaded" }, S.uploadNote) : null;
-      const folds = el("div", { class: "card upl-more-card lp-folds" }, S.mapping ? mappingDetails(S.mapping) : null, ...pages.about.dataDetails());
+      const folds = el("div", { class: "lp-folds" }, S.mapping ? mappingDetails(S.mapping) : null, ...pages.about.dataDetails());
       // "Now showing", the built-in datasets and the template, in three short lines
       const copyOf = DATASETS.report ? ["sample", "demo", "long"].find((k) => DATASETS[k] && DATASETS[k].label === DATASETS.report.label) : null;
       const active = S.key === "report" && copyOf ? copyOf : S.key;
       const ds = (key, label, sub) => DATASETS[key] ? el("button", { type: "button", class: "lp-chip", "aria-pressed": String(active === key), title: sub,
-        onclick: () => loadDataset(DATASETS[key].rows, DATASETS[key].label, DATASETS[key].example, key) }, label, el("small", {}, sub)) : null;
+        onclick: () => loadDataset(DATASETS[key].rows, DATASETS[key].label, DATASETS[key].example, key) }, label) : null;
       const fileBtn = (label, name, getText) => {
         const b = el("button", { type: "button", class: "lp-chip" }, (canDownload ? "⬇ " : "Copy ") + label);
         b.addEventListener("click", async () => {
@@ -995,14 +995,14 @@
         return b;
       };
       const yrs = S.years.length > 1 ? `${S.years[0]}–${last(S.years)}` : String(S.years[0] ?? "");
-      const data = el("div", { class: "lp-data" },
+      const data = el("div", { class: "lp-data" }, folds,
         el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Now showing"),
-          el("b", {}, S.label || "Loaded data"), el("span", { class: "muted" }, `${pl(S.names.length, "SOE")}, ${S.rows.length} SOE-year rows, ${yrs}`)),
+          el("span", { class: "lp-data-val" }, el("b", {}, S.label || "Loaded data"), el("span", { class: "muted" }, `${pl(S.names.length, "SOE")}, ${S.rows.length} SOE-year rows, ${yrs}`))),
         el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Or try built-in data"),
-          DATASETS.report && !copyOf ? ds("report", "Report data", DATASETS.report.label) : null,
-          ds("sample", "Example", "SOE A and B"), ds("demo", "Demo portfolio", "8 SOEs"), ds("long", "Long panel", "30 SOEs")),
+          el("span", { class: "lp-data-val" }, DATASETS.report && !copyOf ? ds("report", "Report data", DATASETS.report.label) : null,
+            ds("sample", "Example", "SOE A and B, 2020–2024"), ds("demo", "Demo portfolio", "8 SOEs in 7 sectors"), ds("long", "Long panel", "30 SOEs, 20 years"))),
         el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Standard template"),
-          fileBtn("Template (CSV)", "soe_tool_template.csv", templateCSV), fileBtn("Dictionary (CSV)", "soe_variable_dictionary.csv", dictionaryCSV)));
+          el("span", { class: "lp-data-val" }, fileBtn("Template (CSV)", "soe_tool_template.csv", templateCSV), fileBtn("Dictionary (CSV)", "soe_variable_dictionary.csv", dictionaryCSV))));
 
       /* 3. what the tool finds in the data on screen: four questions with today's answers */
       H.qs = el("div", { class: "lp-qs" });
@@ -1010,8 +1010,10 @@
         el("h2", { class: "lp-title" }, "Analyze the fiscal risk of your state-owned enterprises"),
         el("p", { class: "lp-lede" }, "Upload the yearly accounts of a country's non-financial SOEs to see which are in financial distress, what they could cost the government budget, and how a shock would change that."),
         el("section", { class: "lp-sec", "aria-labelledby": "lp-h-calc" }, el("h3", { class: "lp-h", id: "lp-h-calc" }, "What the tool calculates"), steps, scope),
-        el("section", { class: "lp-sec", "aria-labelledby": "lp-h-load" }, el("h3", { class: "lp-h", id: "lp-h-load" }, "Load data"), drop, loaded, msg, folds, data),
-        el("section", { class: "lp-sec", "aria-labelledby": "lp-h-find" }, el("h3", { class: "lp-h", id: "lp-h-find" }, "What the tool finds in this data"), H.qs),
+        // load data on the left, what the tool finds on the right
+        el("div", { class: "lp-split" },
+          el("section", { class: "lp-sec", "aria-labelledby": "lp-h-load" }, el("h3", { class: "lp-h", id: "lp-h-load" }, "Load data"), drop, loaded, msg, data),
+          el("section", { class: "lp-sec", "aria-labelledby": "lp-h-find" }, el("h3", { class: "lp-h", id: "lp-h-find" }, "What the tool finds in this data"), H.qs)),
         el("nav", { class: "lp-links", "aria-label": "More" }, go("how", "How it works, step by step"), go("report", "Report"), go("about", "About the tool and your data"))));
     },
     render() {
@@ -2000,7 +2002,7 @@
         el("p", { class: "note", style: "margin-top:6px" }, "The shock, the year it hits and its size are set on the right. The projection runs from the year before the shock to the last year in the data."));
       const panel = view === "macro" ? [macroNote, c2, c4] : view === "backtest" ? [c1, btNote, c2] : [c1, c2, c3, c4, adv];
 
-      H.view = seg([["single", "One SOE"], ["mc", "Range of outcomes"], ["macro", "Portfolio macro shock"], ["backtest", "Model check"]], view === "all" ? "macro" : view, (v) => { st.view = v; rebuild(); }, "View");
+      H.view = seg([["single", "One SOE"], ["mc", "Monte Carlo simulation"], ["macro", "Portfolio macro shock"], ["backtest", "Model check"]], view === "all" ? "macro" : view, (v) => { st.view = v; rebuild(); }, "View");
       H.desc = el("p", { class: "note", style: "margin:8px 0 0" });
       H.strip = statStrip();
       H.out = el("div", { class: "stack", style: "margin-top:16px" });

@@ -107,8 +107,8 @@ toolkit modules, upload with column mapping, data quality), **How it works**
 every step of the calculation for one example SOE, with interactive shock
 transmission), KPI Dashboard, Distress Indicator (Altman Z-EM), Expected
 Fiscal Cost, Shock Scenarios (PD × EAD × LGD first; no shock / standard
-stress / one custom shock at a time; one SOE, range of outcomes (Monte
-Carlo), portfolio macro shock ranking, model check against past years),
+stress / one custom shock at a time; one SOE, Monte Carlo simulation,
+portfolio macro shock ranking, model check against past years),
 Early Warning (trigger rules grouped by issue, with an action plan per SOE)
 and **Report** (five sections, with a print / save-as-PDF button when the
 file is opened on its own). Government Support and Technical notes
