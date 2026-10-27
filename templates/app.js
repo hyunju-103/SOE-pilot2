@@ -832,7 +832,7 @@
         el("div", { class: "tile-top" }, el("span", { class: "module-name" }, name), stChip(k, status)), el("p", {}, text))));
       root.replaceChildren(
         pageHead("ABOUT THE TOOL", "About the tool and your data",
-          "When a state-owned enterprise (SOE) cannot pay its debts, the budget usually pays. This tool estimates how much that could cost, shows which SOEs to look at first, and tests what could make it worse. It is a first screen for country economists, built from each SOE's yearly accounts.",
+          "When a state-owned enterprise (SOE) cannot pay its debts, the budget usually pays. This tool estimates how much that could cost, shows which SOEs to look at first, and tests what could make it worse. It is a first screen, built from each SOE's yearly accounts.",
           el("button", { class: "btn", type: "button", onclick: () => { showTab("home"); window.scrollTo({ top: 0 }); } }, "Back to the start screen")),
         el("div", { class: "grid home-top" }, el("div", { class: "s6" }, H.upload), el("div", { class: "s6" }, H.dq.root)),
         H.more,
@@ -944,33 +944,75 @@
     build(root) {
       const H = (this.H = {});
       const msg = el("div", { class: "lp-msg" });
+
+      /* 1. what the tool is for, and what it calculates (the Altman Z″-EM score explained in place) */
+      const zc = CFG.ZEM_COEFFICIENTS, zd = CFG.Z_DISTRESS_CUTOFF, zs = CFG.Z_SAFE_CUTOFF;
+      const scale = el("div", { class: "lp-scale", role: "img", "aria-label": `Distress at ${zd} or below, grey zone ${zd} to ${zs}, safe above ${zs}` },
+        el("span", { class: "z-d" }, el("i"), el("b", {}, "Distress"), `≤ ${fmt(zd, 1)}`),
+        el("span", { class: "z-g" }, el("i"), el("b", {}, "Grey zone"), `${fmt(zd, 1)}–${fmt(zs, 1)}`),
+        el("span", { class: "z-s" }, el("i"), el("b", {}, "Safe"), `> ${fmt(zs, 1)}`));
+      const formula = el("details", { class: "lp-formula" }, el("summary", {}, "The formula"),
+        el("p", {}, `Z″ = ${zc.X1} X1 + ${zc.X2} X2 + ${zc.X3} X3 + ${zc.X4} X4`),
+        el("ul", {}, el("li", {}, el("b", {}, "X1 "), "working capital ÷ total assets"), el("li", {}, el("b", {}, "X2 "), "retained earnings ÷ total assets"),
+          el("li", {}, el("b", {}, "X3 "), "operating profit (EBIT) ÷ total assets"), el("li", {}, el("b", {}, "X4 "), "book equity ÷ total liabilities")));
+      const step = (n, title, ...body) => el("div", { class: "lp-step" + (n === 2 ? " lp-step-z" : "") },
+        el("div", { class: "lp-step-head" }, el("span", { class: "lp-step-n num" }, String(n)), el("b", {}, title)), ...body);
+      const steps = el("div", { class: "lp-steps" },
+        step(1, "Health ratios", el("p", {}, "Profitability, liquidity, solvency and dependence on the government, read from each SOE's yearly accounts.")),
+        step(2, "Distress score (Altman Z″-EM)",
+          el("p", {}, "Edward Altman's credit-scoring formula for companies in emerging markets. It weights four balance-sheet ratios into one number; the higher, the healthier."),
+          scale, formula),
+        step(3, "Expected fiscal cost", el("p", {}, "The score gives an indicative rating and a chance of default (PD). PD × debt at stake (EAD) × the share the government would bear (LGD) is what the SOE could cost the budget.")),
+        step(4, "Shocks and warnings", el("p", {}, "How a fuel, exchange-rate, interest-rate or revenue shock changes the score and the cost, and which signals call for action.")));
+      const scope = el("p", { class: "lp-scope" }, "Built for one question: the fiscal risk of non-financial SOEs. It is a first screen, not a budget forecast, and it does not assess state banks or other financial SOEs. ", go("about", "What the tool covers"));
+
+      /* 2. load data: the sky-blue drop area, the column and preview folds, then what is on screen */
       const input = el("input", { type: "file", id: "upload", accept: ".csv,.xlsx,.xls,.txt", class: "sr-file", "aria-label": "Upload SOE financial statements, CSV or Excel" });
-      const bar = el("label", { class: "lp-search", id: "uploadCard", for: "upload" },
+      const bar = el("label", { class: "lp-search", for: "upload" },
         uploadIcon(),
-        el("span", { class: "lp-ph" }, el("b", {}, "Drop your SOEs' financial statements here"),
-          el("span", {}, "CSV or Excel, one row per SOE and year. The file stays in your browser.")),
+        el("span", { class: "lp-ph" }, el("b", {}, "Drop a CSV or Excel file here"), el("span", {}, "or choose one from your computer")),
         el("span", { class: "lp-pick" }, "Choose a file"));
+      const drop = el("div", { class: "lp-drop", id: "uploadCard" }, el("div", { class: "lp-box" }, bar, input),
+        el("p", { class: "lp-drop-note" }, "One row per SOE-year. Column names are matched to the standard schema, numbers such as 1,234 · (1,234) · 35% are read, and title rows above the table are skipped. The file is read in this browser only; nothing is sent anywhere."));
       const handle = (file) => readUpload(file, msg);
       input.addEventListener("change", () => { const f = input.files[0]; if (f) handle(f); input.value = ""; });
-      bar.addEventListener("dragover", (e) => { e.preventDefault(); bar.classList.add("over"); });
-      bar.addEventListener("dragleave", () => bar.classList.remove("over"));
-      bar.addEventListener("drop", (e) => { e.preventDefault(); bar.classList.remove("over"); if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]); });
-      // built-in datasets as plain links; the one on screen is marked
+      drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+      drop.addEventListener("dragleave", (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("over"); });
+      drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]); });
+      const loaded = S.key === "upload" && S.uploadNote ? el("p", { class: "lp-loaded" }, S.uploadNote) : null;
+      const folds = el("div", { class: "card upl-more-card lp-folds" }, S.mapping ? mappingDetails(S.mapping) : null, ...pages.about.dataDetails());
+      // "Now showing", the built-in datasets and the template, in three short lines
       const copyOf = DATASETS.report ? ["sample", "demo", "long"].find((k) => DATASETS[k] && DATASETS[k].label === DATASETS.report.label) : null;
       const active = S.key === "report" && copyOf ? copyOf : S.key;
-      const ds = (key, label) => DATASETS[key] ? el("button", { type: "button", class: "lp-ds", "aria-pressed": String(active === key),
-        onclick: () => loadDataset(DATASETS[key].rows, DATASETS[key].label, DATASETS[key].example, key) }, label) : null;
-      const tmpl = el("button", { type: "button", class: "lp-ds", onclick: () => (canDownload ? download("soe_tool_template.csv", templateCSV()) : goTop("about")) }, "the standard template");
-      const tryRow = el("p", { class: "lp-try" }, "No file yet? Explore ", ds("demo", "the demo portfolio"), ", ", ds("sample", "a two-SOE example"), " or ", ds("long", "a 30-SOE panel"), ". Start from ", tmpl, ".");
-      const loaded = S.key === "upload" && S.uploadNote ? el("p", { class: "lp-loaded" }, S.uploadNote, " ", go("about", "Check the column mapping and data preview")) : null;
-      H.now = el("p", { class: "lp-now" });
+      const ds = (key, label, sub) => DATASETS[key] ? el("button", { type: "button", class: "lp-chip", "aria-pressed": String(active === key), title: sub,
+        onclick: () => loadDataset(DATASETS[key].rows, DATASETS[key].label, DATASETS[key].example, key) }, label, el("small", {}, sub)) : null;
+      const fileBtn = (label, name, getText) => {
+        const b = el("button", { type: "button", class: "lp-chip" }, (canDownload ? "⬇ " : "Copy ") + label);
+        b.addEventListener("click", async () => {
+          if (canDownload) { download(name, getText()); return; }
+          try { await navigator.clipboard.writeText(getText()); b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy " + label), 1500); } catch (e) { goTop("about"); }
+        });
+        return b;
+      };
+      const yrs = S.years.length > 1 ? `${S.years[0]}–${last(S.years)}` : String(S.years[0] ?? "");
+      const data = el("div", { class: "lp-data" },
+        el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Now showing"),
+          el("b", {}, S.label || "Loaded data"), el("span", { class: "muted" }, `${pl(S.names.length, "SOE")}, ${S.rows.length} SOE-year rows, ${yrs}`)),
+        el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Or try built-in data"),
+          DATASETS.report && !copyOf ? ds("report", "Report data", DATASETS.report.label) : null,
+          ds("sample", "Example", "SOE A and B"), ds("demo", "Demo portfolio", "8 SOEs"), ds("long", "Long panel", "30 SOEs")),
+        el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Standard template"),
+          fileBtn("Template (CSV)", "soe_tool_template.csv", templateCSV), fileBtn("Dictionary (CSV)", "soe_variable_dictionary.csv", dictionaryCSV)));
+
+      /* 3. what the tool finds in the data on screen: four questions with today's answers */
       H.qs = el("div", { class: "lp-qs" });
       root.replaceChildren(el("div", { class: "lp" },
-        el("h2", { class: "lp-title" }, "What would you like to analyze?"),
-        el("p", { class: "lp-lede" }, "Upload the yearly accounts of a country's state-owned enterprises to see their fiscal risk: which SOEs are weak, what they could cost the budget, and what a shock would do."),
-        el("div", { class: "lp-box" }, bar, input), tryRow, loaded, msg,
-        H.now, H.qs,
-        el("nav", { class: "lp-links", "aria-label": "More" }, go("how", "How it works"), go("kpi", "KPI Dashboard"), go("report", "Report"), go("about", "About the tool and your data"))));
+        el("h2", { class: "lp-title" }, "Analyze the fiscal risk of your state-owned enterprises"),
+        el("p", { class: "lp-lede" }, "Upload the yearly accounts of a country's non-financial SOEs to see which are in financial distress, what they could cost the government budget, and how a shock would change that."),
+        el("section", { class: "lp-sec", "aria-labelledby": "lp-h-calc" }, el("h3", { class: "lp-h", id: "lp-h-calc" }, "What the tool calculates"), steps, scope),
+        el("section", { class: "lp-sec", "aria-labelledby": "lp-h-load" }, el("h3", { class: "lp-h", id: "lp-h-load" }, "Load data"), drop, loaded, msg, folds, data),
+        el("section", { class: "lp-sec", "aria-labelledby": "lp-h-find" }, el("h3", { class: "lp-h", id: "lp-h-find" }, "What the tool finds in this data"), H.qs),
+        el("nav", { class: "lp-links", "aria-label": "More" }, go("how", "How it works, step by step"), go("report", "Report"), go("about", "About the tool and your data"))));
     },
     render() {
       const H = this.H, all = allRows(), rows = latestOf(all), n = rows.length, zc = zoneCounts(rows);
@@ -980,9 +1022,6 @@
       const eB = sum(st.map((x) => last(x.base).EFC)), eS = sum(st.map((x) => last(x.str).EFC));
       const { by } = evalTriggers(rows, stress);
       const lv = (k) => rows.filter((r) => by[r.Entity] && by[r.Entity].level === k).length;
-      const yrs = S.years.length > 1 ? `${S.years[0]}–${last(S.years)}` : String(S.years[0] ?? "");
-      // built-in examples already say what they are in their label; an uploaded file is described
-      put(H.now, "Showing ", el("b", {}, S.label || "your data"), S.example ? (String(S.label).includes(yrs) ? "." : `, accounts ${yrs}.`) : `: ${pl(n, "SOE")} in ${pl(S.sectors.length, "sector")}, accounts ${yrs}.`);
       const zones = (sub) => el("span", { class: "lp-q-sub" }, sub, el("span", { class: "lp-zones", role: "img", "aria-label": `${zc.Distress} in distress, ${zc.Grey} in the grey zone, ${zc.Safe} safe` },
         ...[["Distress", "d"], ["Grey", "g"], ["Safe", "s"]].filter(([z]) => zc[z]).map(([z, c]) => el("i", { class: "z-" + c, style: `flex:${zc[z]}` }))));
       // four rows per card (question, answer, what it means, where to go) so the answers line up across cards

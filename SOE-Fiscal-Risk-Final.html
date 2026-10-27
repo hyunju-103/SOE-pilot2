@@ -1086,31 +1086,67 @@ body[data-tab="how"] { background: #f3f6f8; }
 }
 @media print { .hw-rail, .hw-stage { position: static; } }
 
-/* === Start screen (Home): one question, one upload box, four questions with today's answers === */
-.lp { max-width: 1040px; margin: 0 auto; padding: clamp(28px, 7vh, 76px) 0 28px; text-align: center; }
-.lp-title { font-family: "Overpass", "Segoe UI", Arial, sans-serif; font-weight: 800; font-size: clamp(30px, 4.2vw, 46px); line-height: 1.08; letter-spacing: -.02em; color: var(--heading); margin: 0; }
-.lp-lede { max-width: 60ch; margin: 14px auto 0; font-size: 15.5px; line-height: 1.55; color: var(--ink-2); text-wrap: balance; }
-.lp-box { position: relative; max-width: 720px; margin: 30px auto 0; }
-.lp-search { display: flex; align-items: center; gap: 14px; padding: 9px 9px 9px 20px; border: 1px solid var(--axis); border-radius: 999px; background: var(--surface); box-shadow: 0 1px 4px rgba(0, 34, 68, .07); cursor: pointer; text-align: left; transition: box-shadow .15s ease, border-color .15s ease; }
-.lp-search:hover, .lp-box:focus-within .lp-search { box-shadow: 0 3px 16px rgba(0, 34, 68, .16); border-color: transparent; }
+/* === Start screen (Home): what the tool is for, load data, what it finds === */
+.lp { --sky: #009fda; --sky-wash: rgba(0, 159, 218, .07); --sky-line: rgba(0, 159, 218, .45); --sky-chip: rgba(0, 159, 218, .12);
+  max-width: 1040px; margin: 0 auto; padding: clamp(24px, 5vh, 56px) 0 28px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lp { --sky: #33b5e6; --sky-wash: rgba(51, 181, 230, .09); --sky-line: rgba(51, 181, 230, .45); --sky-chip: rgba(51, 181, 230, .16); } }
+:root[data-theme="dark"] .lp { --sky: #33b5e6; --sky-wash: rgba(51, 181, 230, .09); --sky-line: rgba(51, 181, 230, .45); --sky-chip: rgba(51, 181, 230, .16); }
+.lp-title { font-family: "Overpass", "Segoe UI", Arial, sans-serif; font-weight: 800; font-size: clamp(28px, 3.6vw, 42px); line-height: 1.1; letter-spacing: -.02em; color: var(--heading); margin: 0 auto; max-width: 22ch; text-align: center; text-wrap: balance; }
+.lp-lede { max-width: 800px; margin: 14px auto 0; font-size: 15.5px; line-height: 1.55; color: var(--ink-2); text-align: center; text-wrap: balance; }
+.lp-sec { margin-top: 36px; }
+.lp-h { font-family: "Overpass", "Segoe UI", Arial, sans-serif; font-size: 19px; font-weight: 800; letter-spacing: -.01em; color: var(--heading); margin: 0 0 12px; }
+
+/* what the tool calculates: four steps in order, the distress score given the most room */
+.lp-steps { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 1fr); border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.lp-step { padding: 16px 18px; border-left: 1px solid var(--line); min-width: 0; }
+.lp-step:first-child { border-left: 0; }
+.lp-step-z { background: var(--surface-2); }
+.lp-step-head { display: flex; align-items: center; gap: 9px; }
+.lp-step-head b { font-size: 14.5px; color: var(--heading); line-height: 1.3; }
+.lp-step-n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--heading); color: var(--surface); font-size: 12px; font-weight: 700; }
+.lp-step p { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+.lp-scale { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; margin-top: 12px; font-size: 11.5px; color: var(--ink-2); }
+.lp-scale span { display: grid; gap: 1px; }
+.lp-scale i { display: block; height: 7px; margin-bottom: 4px; }
+.lp-scale span:first-child i { border-radius: 4px 0 0 4px; } .lp-scale span:last-child i { border-radius: 0 4px 4px 0; }
+.lp-scale .z-d i { background: var(--crit); } .lp-scale .z-g i { background: var(--warn); } .lp-scale .z-s i { background: var(--good); }
+.lp-scale b { font-size: 11.5px; font-weight: 700; color: var(--ink); }
+.lp-formula { margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.lp-formula summary { cursor: pointer; font-weight: 600; color: var(--accent-strong); width: max-content; }
+.lp-formula p { margin: 6px 0 4px; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+.lp-formula ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 12px; }
+.lp-scope { margin: 10px 2px 0; font-size: 12.5px; color: var(--muted); }
+.lp-scope a { font-weight: 600; white-space: nowrap; }
+
+/* load data: the sky-blue drop area */
+.lp-drop { border: 2px dashed var(--sky-line); background: var(--sky-wash); border-radius: 14px; padding: 22px 20px 16px; text-align: center; transition: background-color .15s ease, border-color .15s ease; }
+.lp-drop.over { border-color: var(--sky); background: var(--sky-chip); }
+.lp-drop.flash { animation: flash 1.2s ease; }
+.lp-box { position: relative; max-width: 680px; margin: 0 auto; }
+.lp-search { display: flex; align-items: center; gap: 14px; padding: 9px 9px 9px 20px; border: 1px solid var(--sky-line); border-radius: 999px; background: var(--surface); box-shadow: 0 1px 4px rgba(0, 34, 68, .07); cursor: pointer; text-align: left; transition: box-shadow .15s ease; }
+.lp-search:hover, .lp-box:focus-within .lp-search { box-shadow: 0 3px 16px rgba(0, 34, 68, .14); }
 .lp-box:focus-within .lp-search { outline: 2px solid var(--accent); outline-offset: 2px; }
-.lp-search.over { border: 2px dashed var(--accent); background: var(--accent-wash); }
-.lp-search.flash { animation: flash 1.2s ease; }
-.lp-ico { flex: none; color: var(--accent-strong); }
+.lp-ico { flex: none; color: var(--sky); }
 .lp-ph { flex: 1; min-width: 0; display: grid; gap: 1px; }
-.lp-ph b { font-size: 15px; font-weight: 600; color: var(--ink); }
+.lp-ph b { font-size: 15px; font-weight: 700; color: var(--ink); }
 .lp-ph span { font-size: 12.5px; color: var(--muted); }
 .lp-pick { flex: none; background: var(--accent-strong); color: var(--surface); font-weight: 700; font-size: 13.5px; border-radius: 999px; padding: 10px 20px; white-space: nowrap; }
 .lp-search:hover .lp-pick { filter: brightness(1.08); }
-.lp-try { margin: 14px 0 0; font-size: 13px; color: var(--ink-2); }
-.lp-ds { font: inherit; color: var(--accent-strong); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-.lp-ds[aria-pressed="true"] { color: var(--heading); font-weight: 700; text-decoration: none; cursor: default; }
-.lp-ds:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
-.lp-loaded { max-width: 720px; margin: 12px auto 0; font-size: 12.5px; color: var(--good-ink); }
-.lp-loaded a { font-weight: 600; }
-.lp-msg { max-width: 720px; margin: 0 auto; text-align: left; }
-.lp-now { margin: clamp(36px, 7vh, 64px) 0 12px; font-size: 13px; color: var(--muted); }
-.lp-now b { color: var(--ink); font-weight: 600; }
+.lp-drop-note { max-width: 640px; margin: 12px auto 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.lp-loaded { margin: 10px 2px 0; font-size: 12.5px; color: var(--good-ink); }
+.lp-msg:empty { display: none; }
+.lp-folds { margin-top: 12px; }
+.lp-data { margin-top: 12px; display: grid; gap: 8px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.lp-data-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; min-width: 0; }
+.lp-data-row b { color: var(--heading); }
+.lp-data-lbl { flex: none; width: 150px; font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.lp-chip { font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; white-space: nowrap; }
+.lp-chip small { font-size: 11.5px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+.lp-chip:hover { border-color: var(--sky-line); }
+.lp-chip[aria-pressed="true"] { background: var(--sky-chip); border-color: var(--sky-line); color: var(--heading); cursor: default; }
+.lp-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* what the tool finds: four questions with today's answers */
 .lp-qs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); text-align: left; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
 .lp-q { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px 16px; color: inherit; text-decoration: none; border-left: 1px solid var(--line); min-width: 0; }
 .lp-q:first-child { border-left: 0; }
@@ -1120,27 +1156,33 @@ body[data-tab="how"] { background: #f3f6f8; }
 .lp-q-val { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
 .lp-q-val b { font-family: "Overpass", "Segoe UI", Arial, sans-serif; font-size: 34px; font-weight: 800; line-height: 1; letter-spacing: -.01em; color: var(--heading); }
 .lp-q-val small { font-size: 13px; font-weight: 600; color: var(--ink-2); }
-.lp-q-sub { font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.lp-q-sub { display: block; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
 .lp-zones { display: flex; gap: 2px; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 8px; }
-.lp-q-sub { display: block; }
 .lp-zones .z-d { background: var(--crit); } .lp-zones .z-g { background: var(--warn); } .lp-zones .z-s { background: var(--good); }
 .lp-q-go { margin-top: auto; padding-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--accent-strong); }
+.lp-q:hover .lp-q-go { text-decoration: underline; }
 /* the four cards share their row heights, so the answers sit on one line even when a question wraps */
 @supports (grid-template-rows: subgrid) {
   .lp-qs { grid-template-rows: auto auto 1fr auto; row-gap: 0; }
   .lp-q { display: grid; grid-row: span 4; grid-template-rows: subgrid; gap: 6px; }
   .lp-q-ask { align-self: start; } .lp-q-sub { align-self: start; }
 }
-.lp-q:hover .lp-q-go { text-decoration: underline; }
-.lp-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 22px; margin-top: 22px; font-size: 13px; }
+.lp-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 22px; margin-top: 24px; font-size: 13px; }
 .lp-links a { color: var(--ink-2); }
 .lp-links a:hover { color: var(--accent-strong); }
+@media (max-width: 960px) {
+  .lp-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-step:nth-child(3) { border-left: 0; } .lp-step:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
 @media (max-width: 900px) { .lp-qs { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lp-q:nth-child(3) { border-left: 0; } .lp-q:nth-child(n+3) { border-top: 1px solid var(--line); } }
 @media (max-width: 560px) {
+  .lp-steps { grid-template-columns: minmax(0, 1fr); } .lp-step { border-left: 0; } .lp-step + .lp-step { border-top: 1px solid var(--line); }
   .lp-qs { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; } .lp-q { border-left: 0; display: flex; grid-row: auto; } .lp-q + .lp-q { border-top: 1px solid var(--line); }
+  .lp-drop { padding: 16px 12px 12px; }
   .lp-search { padding-left: 14px; gap: 10px; } .lp-ph span { display: none; } .lp-ph b { font-size: 13.5px; } .lp-pick { padding: 9px 14px; }
+  .lp-data-lbl { width: 100%; }
 }
-@media (prefers-reduced-motion: reduce) { .lp-search { transition: none; } .lp-search.flash { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .lp-search, .lp-drop { transition: none; } .lp-drop.flash { animation: none; } }
 
 </style>
 
@@ -3084,7 +3126,7 @@ body[data-tab="how"] { background: #f3f6f8; }
         el("div", { class: "tile-top" }, el("span", { class: "module-name" }, name), stChip(k, status)), el("p", {}, text))));
       root.replaceChildren(
         pageHead("ABOUT THE TOOL", "About the tool and your data",
-          "When a state-owned enterprise (SOE) cannot pay its debts, the budget usually pays. This tool estimates how much that could cost, shows which SOEs to look at first, and tests what could make it worse. It is a first screen for country economists, built from each SOE's yearly accounts.",
+          "When a state-owned enterprise (SOE) cannot pay its debts, the budget usually pays. This tool estimates how much that could cost, shows which SOEs to look at first, and tests what could make it worse. It is a first screen, built from each SOE's yearly accounts.",
           el("button", { class: "btn", type: "button", onclick: () => { showTab("home"); window.scrollTo({ top: 0 }); } }, "Back to the start screen")),
         el("div", { class: "grid home-top" }, el("div", { class: "s6" }, H.upload), el("div", { class: "s6" }, H.dq.root)),
         H.more,
@@ -3196,33 +3238,75 @@ body[data-tab="how"] { background: #f3f6f8; }
     build(root) {
       const H = (this.H = {});
       const msg = el("div", { class: "lp-msg" });
+
+      /* 1. what the tool is for, and what it calculates (the Altman Z″-EM score explained in place) */
+      const zc = CFG.ZEM_COEFFICIENTS, zd = CFG.Z_DISTRESS_CUTOFF, zs = CFG.Z_SAFE_CUTOFF;
+      const scale = el("div", { class: "lp-scale", role: "img", "aria-label": `Distress at ${zd} or below, grey zone ${zd} to ${zs}, safe above ${zs}` },
+        el("span", { class: "z-d" }, el("i"), el("b", {}, "Distress"), `≤ ${fmt(zd, 1)}`),
+        el("span", { class: "z-g" }, el("i"), el("b", {}, "Grey zone"), `${fmt(zd, 1)}–${fmt(zs, 1)}`),
+        el("span", { class: "z-s" }, el("i"), el("b", {}, "Safe"), `> ${fmt(zs, 1)}`));
+      const formula = el("details", { class: "lp-formula" }, el("summary", {}, "The formula"),
+        el("p", {}, `Z″ = ${zc.X1} X1 + ${zc.X2} X2 + ${zc.X3} X3 + ${zc.X4} X4`),
+        el("ul", {}, el("li", {}, el("b", {}, "X1 "), "working capital ÷ total assets"), el("li", {}, el("b", {}, "X2 "), "retained earnings ÷ total assets"),
+          el("li", {}, el("b", {}, "X3 "), "operating profit (EBIT) ÷ total assets"), el("li", {}, el("b", {}, "X4 "), "book equity ÷ total liabilities")));
+      const step = (n, title, ...body) => el("div", { class: "lp-step" + (n === 2 ? " lp-step-z" : "") },
+        el("div", { class: "lp-step-head" }, el("span", { class: "lp-step-n num" }, String(n)), el("b", {}, title)), ...body);
+      const steps = el("div", { class: "lp-steps" },
+        step(1, "Health ratios", el("p", {}, "Profitability, liquidity, solvency and dependence on the government, read from each SOE's yearly accounts.")),
+        step(2, "Distress score (Altman Z″-EM)",
+          el("p", {}, "Edward Altman's credit-scoring formula for companies in emerging markets. It weights four balance-sheet ratios into one number; the higher, the healthier."),
+          scale, formula),
+        step(3, "Expected fiscal cost", el("p", {}, "The score gives an indicative rating and a chance of default (PD). PD × debt at stake (EAD) × the share the government would bear (LGD) is what the SOE could cost the budget.")),
+        step(4, "Shocks and warnings", el("p", {}, "How a fuel, exchange-rate, interest-rate or revenue shock changes the score and the cost, and which signals call for action.")));
+      const scope = el("p", { class: "lp-scope" }, "Built for one question: the fiscal risk of non-financial SOEs. It is a first screen, not a budget forecast, and it does not assess state banks or other financial SOEs. ", go("about", "What the tool covers"));
+
+      /* 2. load data: the sky-blue drop area, the column and preview folds, then what is on screen */
       const input = el("input", { type: "file", id: "upload", accept: ".csv,.xlsx,.xls,.txt", class: "sr-file", "aria-label": "Upload SOE financial statements, CSV or Excel" });
-      const bar = el("label", { class: "lp-search", id: "uploadCard", for: "upload" },
+      const bar = el("label", { class: "lp-search", for: "upload" },
         uploadIcon(),
-        el("span", { class: "lp-ph" }, el("b", {}, "Drop your SOEs' financial statements here"),
-          el("span", {}, "CSV or Excel, one row per SOE and year. The file stays in your browser.")),
+        el("span", { class: "lp-ph" }, el("b", {}, "Drop a CSV or Excel file here"), el("span", {}, "or choose one from your computer")),
         el("span", { class: "lp-pick" }, "Choose a file"));
+      const drop = el("div", { class: "lp-drop", id: "uploadCard" }, el("div", { class: "lp-box" }, bar, input),
+        el("p", { class: "lp-drop-note" }, "One row per SOE-year. Column names are matched to the standard schema, numbers such as 1,234 · (1,234) · 35% are read, and title rows above the table are skipped. The file is read in this browser only; nothing is sent anywhere."));
       const handle = (file) => readUpload(file, msg);
       input.addEventListener("change", () => { const f = input.files[0]; if (f) handle(f); input.value = ""; });
-      bar.addEventListener("dragover", (e) => { e.preventDefault(); bar.classList.add("over"); });
-      bar.addEventListener("dragleave", () => bar.classList.remove("over"));
-      bar.addEventListener("drop", (e) => { e.preventDefault(); bar.classList.remove("over"); if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]); });
-      // built-in datasets as plain links; the one on screen is marked
+      drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+      drop.addEventListener("dragleave", (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("over"); });
+      drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]); });
+      const loaded = S.key === "upload" && S.uploadNote ? el("p", { class: "lp-loaded" }, S.uploadNote) : null;
+      const folds = el("div", { class: "card upl-more-card lp-folds" }, S.mapping ? mappingDetails(S.mapping) : null, ...pages.about.dataDetails());
+      // "Now showing", the built-in datasets and the template, in three short lines
       const copyOf = DATASETS.report ? ["sample", "demo", "long"].find((k) => DATASETS[k] && DATASETS[k].label === DATASETS.report.label) : null;
       const active = S.key === "report" && copyOf ? copyOf : S.key;
-      const ds = (key, label) => DATASETS[key] ? el("button", { type: "button", class: "lp-ds", "aria-pressed": String(active === key),
-        onclick: () => loadDataset(DATASETS[key].rows, DATASETS[key].label, DATASETS[key].example, key) }, label) : null;
-      const tmpl = el("button", { type: "button", class: "lp-ds", onclick: () => (canDownload ? download("soe_tool_template.csv", templateCSV()) : goTop("about")) }, "the standard template");
-      const tryRow = el("p", { class: "lp-try" }, "No file yet? Explore ", ds("demo", "the demo portfolio"), ", ", ds("sample", "a two-SOE example"), " or ", ds("long", "a 30-SOE panel"), ". Start from ", tmpl, ".");
-      const loaded = S.key === "upload" && S.uploadNote ? el("p", { class: "lp-loaded" }, S.uploadNote, " ", go("about", "Check the column mapping and data preview")) : null;
-      H.now = el("p", { class: "lp-now" });
+      const ds = (key, label, sub) => DATASETS[key] ? el("button", { type: "button", class: "lp-chip", "aria-pressed": String(active === key), title: sub,
+        onclick: () => loadDataset(DATASETS[key].rows, DATASETS[key].label, DATASETS[key].example, key) }, label, el("small", {}, sub)) : null;
+      const fileBtn = (label, name, getText) => {
+        const b = el("button", { type: "button", class: "lp-chip" }, (canDownload ? "⬇ " : "Copy ") + label);
+        b.addEventListener("click", async () => {
+          if (canDownload) { download(name, getText()); return; }
+          try { await navigator.clipboard.writeText(getText()); b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy " + label), 1500); } catch (e) { goTop("about"); }
+        });
+        return b;
+      };
+      const yrs = S.years.length > 1 ? `${S.years[0]}–${last(S.years)}` : String(S.years[0] ?? "");
+      const data = el("div", { class: "lp-data" },
+        el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Now showing"),
+          el("b", {}, S.label || "Loaded data"), el("span", { class: "muted" }, `${pl(S.names.length, "SOE")}, ${S.rows.length} SOE-year rows, ${yrs}`)),
+        el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Or try built-in data"),
+          DATASETS.report && !copyOf ? ds("report", "Report data", DATASETS.report.label) : null,
+          ds("sample", "Example", "SOE A and B"), ds("demo", "Demo portfolio", "8 SOEs"), ds("long", "Long panel", "30 SOEs")),
+        el("div", { class: "lp-data-row" }, el("span", { class: "lp-data-lbl" }, "Standard template"),
+          fileBtn("Template (CSV)", "soe_tool_template.csv", templateCSV), fileBtn("Dictionary (CSV)", "soe_variable_dictionary.csv", dictionaryCSV)));
+
+      /* 3. what the tool finds in the data on screen: four questions with today's answers */
       H.qs = el("div", { class: "lp-qs" });
       root.replaceChildren(el("div", { class: "lp" },
-        el("h2", { class: "lp-title" }, "What would you like to analyze?"),
-        el("p", { class: "lp-lede" }, "Upload the yearly accounts of a country's state-owned enterprises to see their fiscal risk: which SOEs are weak, what they could cost the budget, and what a shock would do."),
-        el("div", { class: "lp-box" }, bar, input), tryRow, loaded, msg,
-        H.now, H.qs,
-        el("nav", { class: "lp-links", "aria-label": "More" }, go("how", "How it works"), go("kpi", "KPI Dashboard"), go("report", "Report"), go("about", "About the tool and your data"))));
+        el("h2", { class: "lp-title" }, "Analyze the fiscal risk of your state-owned enterprises"),
+        el("p", { class: "lp-lede" }, "Upload the yearly accounts of a country's non-financial SOEs to see which are in financial distress, what they could cost the government budget, and how a shock would change that."),
+        el("section", { class: "lp-sec", "aria-labelledby": "lp-h-calc" }, el("h3", { class: "lp-h", id: "lp-h-calc" }, "What the tool calculates"), steps, scope),
+        el("section", { class: "lp-sec", "aria-labelledby": "lp-h-load" }, el("h3", { class: "lp-h", id: "lp-h-load" }, "Load data"), drop, loaded, msg, folds, data),
+        el("section", { class: "lp-sec", "aria-labelledby": "lp-h-find" }, el("h3", { class: "lp-h", id: "lp-h-find" }, "What the tool finds in this data"), H.qs),
+        el("nav", { class: "lp-links", "aria-label": "More" }, go("how", "How it works, step by step"), go("report", "Report"), go("about", "About the tool and your data"))));
     },
     render() {
       const H = this.H, all = allRows(), rows = latestOf(all), n = rows.length, zc = zoneCounts(rows);
@@ -3232,9 +3316,6 @@ body[data-tab="how"] { background: #f3f6f8; }
       const eB = sum(st.map((x) => last(x.base).EFC)), eS = sum(st.map((x) => last(x.str).EFC));
       const { by } = evalTriggers(rows, stress);
       const lv = (k) => rows.filter((r) => by[r.Entity] && by[r.Entity].level === k).length;
-      const yrs = S.years.length > 1 ? `${S.years[0]}–${last(S.years)}` : String(S.years[0] ?? "");
-      // built-in examples already say what they are in their label; an uploaded file is described
-      put(H.now, "Showing ", el("b", {}, S.label || "your data"), S.example ? (String(S.label).includes(yrs) ? "." : `, accounts ${yrs}.`) : `: ${pl(n, "SOE")} in ${pl(S.sectors.length, "sector")}, accounts ${yrs}.`);
       const zones = (sub) => el("span", { class: "lp-q-sub" }, sub, el("span", { class: "lp-zones", role: "img", "aria-label": `${zc.Distress} in distress, ${zc.Grey} in the grey zone, ${zc.Safe} safe` },
         ...[["Distress", "d"], ["Grey", "g"], ["Safe", "s"]].filter(([z]) => zc[z]).map(([z, c]) => el("i", { class: "z-" + c, style: `flex:${zc[z]}` }))));
       // four rows per card (question, answer, what it means, where to go) so the answers line up across cards
@@ -6596,7 +6677,7 @@ body[data-tab="how"] { background: #f3f6f8; }
   });
   /* ---------- tool map: every tab, what it answers, what to set ---------- */
   const HW_MAP = [
-    ["home", "Home", "What data am I using?", "The start screen: load data, then four questions with today's answers (SOEs in trouble, cost to the budget, shocks, signals). Data quality and the column mapping are under About the tool and your data.", [["set", "Upload your file, or pick a built-in example"], ["set", "Download the template and dictionary to prepare your data (About)"]]],
+    ["home", "Home", "What data am I using?", "The start screen: what the tool calculates (with the Altman Z″-EM distress score explained), load data with the column list and preview, then four questions with today's answers (SOEs in trouble, cost to the budget, shocks, signals).", [["set", "Upload your file, or pick a built-in example"], ["set", "Download the template and dictionary to prepare your data"]]],
     ["kpi", "KPI Dashboard", "Is each SOE healthy, and why not?", "Ratios in four groups, coloured green, amber or red; one SOE's trend, or SOEs side by side.", [["set", "View, years and SOE"], ["adv", "Red / amber / green cut-offs are illustrative (Technical notes)"]]],
     ["altman", "Distress Indicator", "How close is each SOE to distress?", "The four health checks, the distress score and its zone, an indicative rating.", [["set", "SOE and period"], ["def", "Weights and zone cut-offs: leave as they are"]]],
     ["efc", "Expected Fiscal Cost", "What could each SOE cost the budget?", "PD × EAD × LGD for each SOE and the portfolio, as money and as a share of GDP.", [["set", "Share the government bears (LGD), share of debt at stake (EAD), GDP"], ["def", "Chance of distress per rating step: placeholder values"]]],
