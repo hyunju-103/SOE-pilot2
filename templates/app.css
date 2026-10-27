@@ -1234,7 +1234,6 @@ body[data-tab="how"] { background: #f3f6f8; }
 .lp-more:hover { color: var(--ink-2); text-decoration-color: currentColor; }
 .lp-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .lp-more-text[hidden] { display: none; }
-.lp-intro .lp-more-text { margin-bottom: 4px; }
 /* start screen, wide intro: the text runs the full content width (the same edges as the sections below),
    and the headline sits on one line, so the upload box reaches the first screen */
 .lp { padding-top: clamp(16px, 3vh, 32px); }

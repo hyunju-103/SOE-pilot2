@@ -940,20 +940,17 @@
     svgEl("path", { d: "M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4", fill: "none", stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round" }, svg);
     return svg;
   }
-  /** the last paragraph of the start-screen text, behind an inline "more..." so the upload box stays on the first screen.
-   *  The link sits at the end of the paragraph before; once open it reads "less" at the end of the revealed one. */
-  function moreText(before, extra) {
-    extra.hidden = true; extra.id = nid("lp-more");
+  /** the start-screen text as one paragraph: the end of it is hidden behind an inline "more..." so the upload box
+   *  stays on the first screen. Opening shows the rest in place, in the same paragraph, followed by "less". */
+  function moreText(shown, rest) {
+    const extra = el("span", { class: "lp-more-text", id: nid("lp-more") }, " " + rest);
+    extra.hidden = true;
     const btn = el("button", { type: "button", class: "lp-more", "aria-expanded": "false", "aria-controls": extra.id }, "more...");
-    const tag = el("span", { class: "lp-more-tag" }, " ", btn); // the space travels with the link
-    before.append(tag);
     btn.addEventListener("click", () => {
       const open = extra.hidden;
       extra.hidden = !open; btn.setAttribute("aria-expanded", String(open)); btn.textContent = open ? "less" : "more...";
-      (open ? extra : before).append(tag);
-      btn.focus();
     });
-    return [before, extra];
+    return [shown, extra, " ", btn];
   }
   pages.home = {
     build(root) {
@@ -1025,9 +1022,9 @@
         el("h2", { class: "lp-title" }, "Analyze the fiscal risk of your state-owned enterprises"),
         // the tool's purpose, method and limits, as written by the team (paragraph breaks added for reading)
         el("div", { class: "lp-intro" },
-          el("p", {}, "Governments often learn about the fiscal cost of a state-owned enterprise only when it asks for a bailout, builds up arrears, or calls on a guarantee. This tool helps ministries of finance, SOE monitoring units, and World Bank country teams spot those risks earlier."),
-          ...moreText(el("p", {}, "Using basic financial statements, it scores each SOE with the Altman Z″, a well-established measure of financial health calibrated for emerging markets, and ranks the portfolio by distress score to show which enterprises are most likely to need support from the budget. Alongside this distress score, the tool computes complementary financial indicators that provide additional context on liquidity, leverage, and operational performance. The Z″-score is then mapped to a shadow credit rating, which is used to derive an estimate of expected fiscal cost by combining the implied probability of default with sector-specific loss assumptions to express the potential government exposure as a share of GDP."),
-            el("p", { class: "lp-more-text" }, "Users can also simulate how fiscal exposure changes under macroeconomic shocks including fuel price movements, exchange rate shifts, and revenue contractions, and assess risk across the portfolio as a whole. The tool does not capture every source of SOE-related fiscal risk, and pricing subsidies, uncompensated public service obligations, and quasi-fiscal deficits require additional analysis, but as a first-pass screening instrument built for environments where data is limited and capacity is stretched, it offers a practical starting point for governments that want to move from reactive crisis management to proactive fiscal risk monitoring."))),
+          el("p", {}, ...moreText(
+            "Governments often learn about the fiscal cost of a state-owned enterprise only when it asks for a bailout, builds up arrears, or calls on a guarantee. This tool helps ministries of finance, SOE monitoring units, and World Bank country teams spot those risks earlier. Using basic financial statements, it scores each SOE with the Altman Z″, a well-established measure of financial health calibrated for emerging markets, and ranks the portfolio by distress score to show which enterprises are most likely to need support from the budget. Alongside this distress score, the tool computes complementary financial indicators that provide additional context on liquidity, leverage, and operational performance. The Z″-score is then mapped to a shadow credit rating, which is used to derive an estimate of expected fiscal cost by combining the implied probability of default with sector-specific loss assumptions to express the potential government exposure as a share of GDP.",
+            "Users can also simulate how fiscal exposure changes under macroeconomic shocks including fuel price movements, exchange rate shifts, and revenue contractions, and assess risk across the portfolio as a whole. The tool does not capture every source of SOE-related fiscal risk, and pricing subsidies, uncompensated public service obligations, and quasi-fiscal deficits require additional analysis, but as a first-pass screening instrument built for environments where data is limited and capacity is stretched, it offers a practical starting point for governments that want to move from reactive crisis management to proactive fiscal risk monitoring."))),
         // load data on the left, what the tool finds on the right
         el("div", { class: "lp-split" },
           el("section", { class: "lp-sec", "aria-labelledby": "lp-h-load" }, el("h3", { class: "lp-h", id: "lp-h-load" }, "Load data"), drop, loaded, msg, data),
