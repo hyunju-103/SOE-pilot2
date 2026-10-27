@@ -6,7 +6,7 @@
 - **GDP 자동 입력**: World Bank 시리즈(현지통화 LCU `NY.GDP.MKTP.CN` / 미국 달러 `NY.GDP.MKTP.CD`)를 고르고 국가·연도를 선택하면 GDP가 자동으로 채워지고 바로 모델에 반영됩니다. 그다음 단위(Billions·Millions 등)를 고르면 표시만 바뀝니다. 재무제표와 통화가 다르면 채워만 두고 "Use it anyway"를 체크해야 반영됩니다. 데이터에 `Country` 열이 있으면 국가도 자동 선택됩니다. 세네갈이 항상 "Currency mismatch"로 나오던 버그도 고쳤습니다.
 - **Expected Fiscal Cost 배치**: 왼쪽 Settings, 오른쪽에 막대그래프 두 개(EFC by SOE · Government backstop sensitivity)를 한 행에, 그 아래 LGD calibration, 맨 아래 EFC results.
 - **Shock Scenarios 배치**: Distress score path · Expected fiscal cost path 행을 "what moved it" 그래프 두 개보다 위로 올렸습니다.
-- **첫 화면 2단 배치**: Load data(왼쪽)와 What the tool finds in this data(오른쪽, 카드 2×2)를 한 행에 놓고 여백을 줄였습니다. 화면 폭 1000px 미만에서는 위아래로 쌓입니다.
+- **첫 화면 2단 배치**: Load data(왼쪽)와 What the tool finds in this data(오른쪽, 카드 2×2)를 한 행에 놓고 여백을 줄였습니다. 화면 폭 1000px 미만에서는 위아래로 쌓입니다. Data preview·Column mapping 표를 펼치면 오른쪽 카드 위로 넘치던 문제를 고쳐, 표가 왼쪽 칸 안에서 가로로 스크롤됩니다.
 - **Shock Scenarios 보기 이름**: "Range of outcomes" → **"Monte Carlo simulation"**. 계산은 바뀌지 않았습니다.
 
 ---

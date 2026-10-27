@@ -1218,3 +1218,9 @@ body[data-tab="how"] { background: #f3f6f8; }
 @media (max-width: 560px) { .lp-split .lp-data-row { grid-template-columns: minmax(0, 1fr); } }
 /* an open fold (column list, data preview) makes the left column long: the answers then keep their own height */
 .lp-split:has(.lp-folds details[open]) { align-items: start; }
+/* the folds' tables (column mapping, data preview) scroll inside the left column instead of spilling over the answers */
+.lp-data, .lp-folds { grid-template-columns: minmax(0, 1fr); }
+.lp-folds > details { min-width: 0; }
+.lp-folds .tbl-wrap { max-width: 100%; }
+.lp-folds th, .lp-folds td { white-space: nowrap; }
+.lp-folds td:first-child { white-space: normal; min-width: 250px; max-width: 280px; }
