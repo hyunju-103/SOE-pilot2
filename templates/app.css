@@ -1241,3 +1241,17 @@ body[data-tab="how"] { background: #f3f6f8; }
 .lp-intro { max-width: none; margin-top: 14px; }
 .lp-intro p { font-size: 14.5px; line-height: 1.6; margin-bottom: 8px; }
 .lp-split > .lp-sec { margin-top: 18px; }
+/* intro: a centred reading column with air between the lines, so it reads as an introduction, not a wall of text */
+.lp-intro { max-width: 920px; margin: 16px auto 0; }
+.lp-intro p { font-size: 14.5px; line-height: 1.8; color: var(--ink-2); text-wrap: pretty; }
+.lp-intro { margin-top: 12px; }
+.lp-intro p { line-height: 1.75; }
+.lp-split > .lp-sec { margin-top: 12px; }
+/* headline and intro share one block as wide as the headline plus a small overhang on each side; the intro fills it
+   (contain: inline-size keeps the paragraph from widening the block, so the headline alone sets the width) */
+.lp-hero { width: fit-content; max-width: 100%; margin: 0 auto; }
+.lp-hero .lp-title { margin: 0 28px; }
+.lp-hero .lp-intro { contain: inline-size; max-width: none; margin: 12px 0 0; }
+@media (min-width: 900px) { .lp-hero .lp-title { white-space: nowrap; } }
+@media (max-width: 899px) { .lp-hero { width: auto; } .lp-hero .lp-title { margin: 0; } }
+.lp-split > .lp-sec { margin-top: 22px; }
