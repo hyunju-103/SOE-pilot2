@@ -227,14 +227,29 @@ def main():
     check("10 CRR 120%: the SOE keeps the rest", g["EBIT"].iloc[1], 60.0 + (1.2 * 940 - 800 - 200))
 
     # 11. collections: blended 94% -> 6% of the 800 billed to customers unpaid
-    col = dict(zero, collect_public=0.6, customer_arrears_collected=0.5, cash_gap_short_term_share=1.0)
+    # (a) no loss allowance (the earlier model): unpaid bills are a full-value current asset
+    col = dict(zero, collect_public=0.6, customer_arrears_collected=0.5, cash_gap_short_term_share=1.0,
+               customer_arrears_provision_share=0.0)
     g = shocks.run_scenario(U, col, 2)
     check("11 customer arrears year 1", g["Customer Arrears"].iloc[1], 48.0)
     check("11 customer arrears change year 2", g["Customer Arrears Change"].iloc[2], 48.0 - 24.0)
     check("11 customer arrears year 2", g["Customer Arrears"].iloc[2], 72.0)
-    check("11 current assets up", g["Current Assets"].iloc[1], base["Current Assets"].iloc[1] + 48.0)
+    # full collection holds the year's profit of 20 as cash; here it funds part of the arrears instead
+    check("11 current assets up", g["Current Assets"].iloc[1], base["Current Assets"].iloc[1] + 48.0 - 20.0)
     check("11 funded as a cash gap (less the year's profit of 20)", g["Cash Funding Gap"].iloc[1], 48.0 - 20.0)
     check("11 all paid: inert", shocks.run_scenario(U, dict(col, collect_public=1.0), 2)["Customer Arrears"].iloc[2], 0.0)
+    # (b) the default: unpaid bills are a loss when billed, collections of them come back as income
+    g1 = shocks.run_scenario(U, dict(col, customer_arrears_provision_share=1.0), 2)
+    check("11 allowance: gross arrears unchanged", g1["Customer Arrears"].iloc[2], 72.0)
+    check("11 allowance: covers them in full", g1["Customer Arrears Allowance"].iloc[2], 72.0)
+    check("11 allowance: loss year 1", g1["Customer Arrears Provision"].iloc[1], 48.0)
+    check("11 allowance: year 2 = new 48 less 24 recovered", g1["Customer Arrears Provision"].iloc[2], 48.0 - 24.0)
+    check("11 allowance: net income year 1", g1["Net Income"].iloc[1], 20.0 - 48.0)
+    check("11 allowance: not cash, same funding gap", g1["Cash Funding Gap"].iloc[2], g["Cash Funding Gap"].iloc[2])
+    check("11 allowance: current assets no higher than full collection", min(0.0, base["Current Assets"].iloc[1] - g1["Current Assets"].iloc[1]), 0.0)
+    check("11 allowance: Z-EM no higher than full collection", min(0.0, base["Z_EM"].iloc[1] - g1["Z_EM"].iloc[1]), 0.0)
+    g5 = shocks.run_scenario(U, dict(col, customer_arrears_provision_share=0.5), 1)
+    check("11 allowance 50%: half the arrears stay an asset", g5["Current Assets"].iloc[1], g["Current Assets"].iloc[1] - 24.0)
 
     # 12. demand growth, losses, supplier discount, State payment uplift
     g = shocks.run_scenario(U, dict(zero, demand_growth=0.05), 2)

@@ -140,6 +140,7 @@ python tests/check_cash_channel.py      # oil-shock cash channel checks
 python tests/check_fuel_path_cash.py    # fuel path, oil linkage, tariff base, cash-first (needs git for the bit-exact part)
 python tests/check_cash_waterfall.py    # cash waterfall, refinancing, borrowing cap / emergency support, RMA coverage
 python tests/check_waterfall_v2.py      # country orders, shortfall rules, adoption, late interest, default, tariffs and collections, PD methods
+python tests/check_collections_sign.py  # needs Node.js; lower collections never raise Z-EM (both engines)
 ```
 
 From a shell:
@@ -374,8 +375,11 @@ which the utility borrows to cover.
     When the data report `Cash and Equivalents`, each year's cash shortfall
     is paid first from cash above the floor, times the share; only the rest
     is borrowed (short-term / long-term split as above). A later surplus
-    repays short-term debt, then rebuilds the cash drawn — never above the
-    cumulative drawdown; anything beyond stays in total assets as before.
+    repays short-term debt; the rest is held as cash, a current asset (it
+    first rebuilds the cash drawn). Before November 2026 the part beyond the
+    cumulative drawdown left current assets, which made a profitable SOE look
+    less liquid than one whose customers paid late
+    (`docs/CHANGES-collections-sign.md`).
     This follows the financing order of the IMF SOE Stress Test Tool User
     Guide (2023, Section VIII): cash first, then borrowing, then injections —
     many SOEs in developing countries cannot borrow quickly. Without a cash
@@ -404,7 +408,10 @@ which the utility borrows to cover.
     of the State receivable counted in current assets
     (`receivable_current_share`), collection rates for households, large
     private customers and public administrations (unpaid bills become
-    `Customer Arrears`), demand growth and network losses.
+    `Customer Arrears`; `customer_arrears_provision_share`, default 100%, of
+    each year's new unpaid bills is a loss when billed and comes back as
+    income when collected, so lower collections cannot raise Z-EM), demand
+    growth and network losses.
   - *Probability of default* (`pd_method`, below LGD and EAD): rating bands
     (at most 40%), rating bands with a logistic tail below the D threshold,
     a logistic curve in Z-EM, or a user value for deterministic views.

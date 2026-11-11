@@ -18,8 +18,9 @@ cash-first financing in shocks.run_scenario.
 5. Tariff revenue base: revenue, revenue less grants, missing grants, grants
    above revenue.
 6. Cash arithmetic on an illustrative utility: draw above the floor, the rest
-   borrowed and grossed up for interest; half share; replenishment capped at
-   the cumulative drawdown; TA = TL + Equity.
+   borrowed and grossed up for interest; half share; a surplus after
+   repayments is held as cash (it first rebuilds the cumulative drawdown,
+   then keeps adding to cash); TA = TL + Equity.
 7. Monte Carlo with a path is centred on the path peak and keeps its shape.
 8. The chart caption of the oil preset.
 """
@@ -156,14 +157,22 @@ def main():
                 if t <= p["shock_duration_years"]:
                     tot += -p["arrears_pct_of_revenue"] * r["Revenues"]
                 adj.append(tot)
+            # second deliberate difference (docs/CHANGES-collections-sign.md): a surplus left after the repayments is
+            # held as cash, a current asset. Current assets then exceed 064ac24 by the extra cash, and the columns
+            # computed from them (X1, Z_EM, Zone, Rating, the current ratios) are not compared in those years.
+            # (064ac24 has no cash column; the compared runs never draw cash, so the extra cash is Cash less opening cash)
+            held = [float(a["Cash"].iloc[t]) - float(a["Cash"].iloc[0]) for t in range(len(b))]
             for c in b.columns:
                 for t in range(len(b)):
                     n += 1
-                    if adj[t] != 0 and c in ("X2", "X4", "Z_EM", "Zone", "Rating"):
+                    if (adj[t] != 0 and c in ("X2", "X4", "Z_EM", "Zone", "Rating")) or (held[t] != 0 and c in (
+                            "Cash", "X1", "Z_EM", "Zone", "Rating", "Current Ratio", "Adjusted Current Ratio")):
                         n -= 1
                         continue
                     if adj[t] != 0 and c in ("Equity", "Retained Earnings"):
                         ok = close(float(a[c].iloc[t]), float(b[c].iloc[t]) + adj[t])
+                    elif held[t] != 0 and c == "Current Assets":
+                        ok = close(float(a[c].iloc[t]), float(b[c].iloc[t]) + held[t])
                     else:
                         ok = same(a[c].iloc[t], b[c].iloc[t])
                     if not ok:
@@ -205,11 +214,23 @@ def main():
         # Compare the draws and Z-EM directly, and EFC after rebuilding the 064ac24 definition from the
         # new run's own Z-EM / rating / debt-default / EAD / LGD (band PD, missed-service override on).
         a_ref = shocks.add_cost(a, 70, 1.0, dict(p, pd_method="rating", pd_override_on_missed_service=True))
+        # A surplus held as cash (docs/CHANGES-collections-sign.md) only adds to current assets, so in rows where
+        # cash has built up, Z-EM must be at or above 064ac24 and EFC at or below; elsewhere both stay bit-exact.
+        # (SOE F reports no cash, so its Cash column is the surplus held.)
+        held = a["Cash"].to_numpy() != 0
         for c, x_col in [("fuel_shock_pct", a["fuel_shock_pct"]), ("fx_shock_pct", a["fx_shock_pct"]),
                          ("Z_EM", a["Z_EM"]), ("EFC", a_ref["EFC"])]:
             n += 1
-            if not all(same(x, y) for x, y in zip(x_col, b[c])):
+            if c in ("Z_EM", "EFC"):
+                sign = 1 if c == "Z_EM" else -1
+                ok = all((sign * (x - y) >= -1e-9 * max(1.0, abs(y))) if h else same(x, y) for x, y, h in zip(x_col, b[c], held))
+            else:
+                ok = all(same(x, y) for x, y in zip(x_col, b[c]))
+            if not ok:
                 fails.append(f"2d Monte Carlo {c} differs from {BASE_COMMIT}")
+        n += 1
+        if not held.any() or held.all():
+            fails.append("2d Monte Carlo: expected some rows with cash held and some without")
 
     # 3. path [p]*D + [0]*(H-D) == step of magnitude p for D years
     for name, p0 in cases.items():
@@ -310,7 +331,7 @@ def main():
     rep = dict(base, fuel_shock_pct=0.0, tariff_increase_pct=0.0, fuel_cost_share=0.4, fuel_shock_path=[1 / 3],
                cash_floor_opex_share=0.1)
     pr = shocks.run_scenario(P, rep, 6)
-    exp_cash = [150.0, 90.0, 110.0, 130.0, 150.0, 150.0, 150.0]
+    exp_cash = [150.0, 90.0, 110.0, 130.0, 150.0, 170.0, 190.0]     # the surplus keeps adding to cash once the drawdown is rebuilt
     for t, v in enumerate(exp_cash):
         n += 2
         if not close(pr["Cash"].iloc[t], v):
@@ -318,17 +339,18 @@ def main():
         if not close(pr["Total Assets"].iloc[t], 3000.0 + (0 if t == 0 else -60.0 + 20.0 * (t - 1))):
             fails.append(f"6 replenishment t={t}: total assets {pr['Total Assets'].iloc[t]}")
     n += 1
-    if not close(pr["Current Assets"].iloc[6] - pr["Current Assets"].iloc[0], 0.0):
-        fails.append("6 replenishment beyond the drawdown must not reach current assets")
+    if not close(pr["Current Assets"].iloc[6] - pr["Current Assets"].iloc[0], 40.0):
+        fails.append("6 replenishment beyond the drawdown is held as cash, a current asset")
     for tag, path, row, p in [("loss", pc, L, cash), ("half", half, L, dict(cash, cash_buffer_share=0.5)), ("replenish", pr, P, rep)]:
         for t, d in enumerate(identity_drift(path, row, p), 1):
             n += 1
             if abs(d) > 1e-6:
                 fails.append(f"6 identity {tag} t={t}: drift {d:.4g}")
-    # the cash column: 0 without a cash figure, flat when the buffer is off
+    # the cash column: without a cash figure it starts at 0 and holds only the surpluses (profit 20 a year);
+    # flat when the buffer is off and the SOE makes losses
     n += 2
-    if shocks.run_scenario(U, cash, 2)["Cash"].abs().sum() != 0:
-        fails.append("6 Cash must be 0 when the data report no cash")
+    if list(shocks.run_scenario(U, cash, 2)["Cash"]) != [0.0, 20.0, 40.0]:
+        fails.append("6 Cash must start at 0 and hold only the surpluses when the data report no cash")
     if not (shocks.run_scenario(L, dict(cash, cash_buffer_share=0.0), 2)["Cash"] == 150.0).all():
         fails.append("6 Cash must stay at its opening value when the buffer is off")
 

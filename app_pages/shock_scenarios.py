@@ -300,6 +300,9 @@ with t5:
             share_public = st.slider("Public administrations: share", 0.0, 1.0, _start("share_public"), 0.05)
             collect_public = st.slider("Public administrations: collected", 0.0, 1.0, _start("collect_public"), 0.01)
             customer_arrears_collected = st.slider("Customer arrears collected the next year", 0.0, 1.0, _start("customer_arrears_collected"), 0.05)
+            customer_arrears_provision_share = st.slider("Unpaid bills treated as a loss", 0.0, 1.0, _start("customer_arrears_provision_share"), 0.05,
+                                                         help="Share of each year's unpaid customer bills booked as a loss when billed; later collections come back as income. "
+                                                              "0% = keep unpaid bills as a full-value current asset.")
 
 with t2:
     c1, c2 = st.columns(2)
@@ -385,7 +388,7 @@ params = {
     "cost_recovery_ratio": cost_recovery_ratio, "tariff_gap_state_share": tariff_gap_state_share, "receivable_current_share": receivable_current_share,
     "share_households": share_households, "collect_households": collect_households, "share_large_private": share_large_private,
     "collect_large_private": collect_large_private, "share_public": share_public, "collect_public": collect_public,
-    "customer_arrears_collected": customer_arrears_collected, "demand_growth": demand_growth, "losses_change": losses_change,
+    "customer_arrears_collected": customer_arrears_collected, "customer_arrears_provision_share": customer_arrears_provision_share, "demand_growth": demand_growth, "losses_change": losses_change,
 }
 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -729,7 +732,8 @@ if view_mode == "Single scenario":
         shock's effect on EBIT and interest; any cash shortfall (losses, unpaid State compensation, trapped VAT) is paid first
         from the SOE's opening cash where the data report it (above the floor on the Cash &amp; financing tab), and the rest is
         borrowed — in current liabilities for the short-term share, otherwise as long-term debt; a later surplus repays
-        short-term debt, then rebuilds the cash drawn. See shocks.py for full documentation.</p>
+        short-term debt and the rest is held as cash. Unpaid customer bills are a loss until collected (by default).
+        See shocks.py for full documentation.</p>
         <p><b>Fuel cost split.</b> The fuel-cost change is fuel share × oil linkage × operating expense × the fuel price shock
         (the slider for the shock years, or the year's value of the fuel price path when one is set). A tariff increase
         (policy Option B) is applied first. What is left of the fuel-cost change is

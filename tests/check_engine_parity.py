@@ -105,7 +105,7 @@ CASH_KEYS = ["Net Income", "Current Liabilities", "Current Assets", "Total Asset
              "Arrears to IPPs", "Arrears to Fuel Suppliers", "Missed Debt Service", "Arrears on Own Operations", "Reserve Account",
              "Debt Default", "State Shortfall Payment", "Late-payment Interest", "Waterfall Routed Share", "Tariff Gap Compensation Change",
              "Customer Arrears Change", "Arrears on O&M Floor", "Arrears to Junior Creditors", "Arrears to Statutory and Operator",
-             "Customer Arrears", "Cumulative State Shortfall Payment", "X1"]
+             "Customer Arrears", "Cumulative State Shortfall Payment", "X1", "Customer Arrears Provision", "Customer Arrears Allowance"]
 
 
 def close(a, b, tol=1e-6):
@@ -175,6 +175,10 @@ def main():
                                  collect_households=0.9, collect_public=0.6, demand_growth=0.04, losses_change=0.02,
                                  tariff_revenue_base="revenue_ex_grants", tariff_increase_pct=0.05),
         "crr_full": dict(wf2, cost_recovery_ratio=1.1, pd_method="logistic"),
+        # customer arrears: partial loss allowance with slow collection, and no allowance (the earlier model)
+        "cust_allow_partial": dict(oil, collect_households=0.85, collect_public=0.5, customer_arrears_collected=0.3,
+                                   customer_arrears_provision_share=0.4, cash_gap_short_term_share=0.5),
+        "cust_allow_off": dict(wf2, collect_public=0.6, customer_arrears_provision_share=0.0, customer_arrears_collected=0.8),
         "refi_rating": dict(oil_policy, refinance_share=0.6, refinance_start_year=2, refinance_min_rating="CCC", pd_method="user", pd_user=0.07),
         "pd_default40": dict(wf2, comp_paid_share=0.0, pd_on_default=0.4, pd_method="rating_tail", pd_logit_b=-0.8),
     }

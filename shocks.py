@@ -33,7 +33,8 @@ to FX/rate/revenue/arrears/refinancing per the boss-commissioned brief):
                unpaid supplier bills for cash_gap_payables_share), the rest long-term.
                New bank and long-term debt carries new_debt_interest_rate (half a
                year on the year's draw). A cash surplus repays the short-term debt
-               first, then rebuilds the cash drawn in earlier years. Defaults
+               first; the rest is held as cash (a current asset), first
+               rebuilding the cash drawn in earlier years. Defaults
                (config.DEFAULT_CASH_SETTINGS) reproduce the original model (everything
                paid in-year, gap funded long-term, no interest) except that an SOE
                reporting cash draws it down before borrowing; cash_buffer_share = 0
@@ -153,6 +154,8 @@ def run_scenario(base_row: pd.Series, params: dict, horizon_years: int) -> pd.Da
         # cash waterfall: arrears by priority tier and the reserve account
         "ArrIPP": 0.0, "ArrFuel": 0.0, "ArrDebt": 0.0, "ArrOps": 0.0, "Reserve": 0.0,
         "ArrStat": 0.0, "ArrFloor": 0.0, "ArrJun": 0.0, "StateShortfall": 0.0, "CustArrears": 0.0,
+        # customer arrears: allowance for the part treated as lost (only CustArrears - CustAllow is an asset)
+        "CustAllow": 0.0,
         # snapshot rules: a year with debt service unpaid is rated D; share of the State receivable in current assets
         "DefaultRule": _num(params.get("default_on_missed_debt"), 0.0) > 0,
         "RecvCurrent": min(1.0, max(0.0, _num(params.get("receivable_current_share"), 1.0))),
@@ -223,6 +226,7 @@ def run_scenario(base_row: pd.Series, params: dict, horizon_years: int) -> pd.Da
     seg_w = sum(max(0.0, w) for w, _ in seg)
     coll = sum(max(0.0, w) * min(1.0, max(0.0, c)) for w, c in seg) / seg_w if seg_w > 0 else 1.0
     cust_collect = min(1.0, max(0.0, _num(params.get("customer_arrears_collected"), 0.5)))
+    cust_prov = min(1.0, max(0.0, _num(params.get("customer_arrears_provision_share"), 1.0)))
     growth = _num(params.get("demand_growth"), 0.0)
     losses = _num(params.get("losses_change"), 0.0)
     rev0, opex0 = base_row["Revenues"], base_row["Operating Expense"]
@@ -297,7 +301,11 @@ def run_scenario(base_row: pd.Series, params: dict, horizon_years: int) -> pd.Da
         d_receivable = unpaid - provision - collected
         # customers' unpaid bills (collection rates by segment)
         billed = cust_rev + tariff_revenue + customer_share
-        d_cust = billed * (1.0 - coll) - state["CustArrears"] * cust_collect
+        new_cust = billed * (1.0 - coll)
+        d_cust = new_cust - state["CustArrears"] * cust_collect          # change in what customers owe
+        # loss allowance: a share of the new unpaid bills is a loss when billed, and what is later
+        # collected of the provided part comes back as income (the allowance is released in step)
+        cust_charge = new_cust * cust_prov - state["CustAllow"] * cust_collect
 
         # bills by tier (waterfall), and what the priority creditors give back for their priority
         opex = state["OpEx"]
@@ -324,10 +332,11 @@ def run_scenario(base_row: pd.Series, params: dict, horizon_years: int) -> pd.Da
         # Net Income exactly, every year.
         d_ebit_total = d_ebit_fuel + d_ebit_fx + d_ebit_revenue
         interest_open = rate * (state["ShortTermDebt"] + state["LongTermDebt"])
-        ni_before_new = base_row["Net Income"] + d_ebit_total - d_interest - provision - interest_open + saving + d_ebit_extra - interest_late
+        ni_before_new = (base_row["Net Income"] + d_ebit_total - d_interest - provision - interest_open + saving + d_ebit_extra
+                         - interest_late - cust_charge)
 
         # cash the SOE has to find this year (negative = surplus)
-        need = -ni_before_new + d_receivable + trapped_vat + d_cust
+        need = -ni_before_new + d_receivable + trapped_vat + (d_cust - cust_charge)   # the allowance is not cash
         funding = interest_new = repaid = left_over = draw = rebuilt = support = 0.0
         unpaid_t = dict.fromkeys(_TIER_KEYS, 0.0)
         r_draw = top_up = state_pay = 0.0
@@ -395,7 +404,7 @@ def run_scenario(base_row: pd.Series, params: dict, horizon_years: int) -> pd.Da
             r_ap = min(surplus, state["SupplierArrears"]); state["SupplierArrears"] -= r_ap; surplus -= r_ap
             repaid += r_bank + r_ap
             left_over = surplus
-            if cash_live:                                        # rebuilds the cash drawn in earlier years, no further
+            if cash_live:                                        # first rebuilds the cash drawn in earlier years
                 rebuilt = min(left_over, state["CashDrawn"])
         wf_unpaid = sum(unpaid_t.values())
         net_income_t = ni_before_new - interest_new
@@ -410,6 +419,7 @@ def run_scenario(base_row: pd.Series, params: dict, horizon_years: int) -> pd.Da
         state["Receivable"] += d_receivable
         state["TrappedVAT"] += trapped_vat
         state["CustArrears"] += d_cust
+        state["CustAllow"] += cust_charge
         # the arrears write-down is a non-cash impairment of current assets: it hits equity and retained
         # earnings in the same year, but not EBIT, net income or the financing need
         state["RetainedEarnings"] = state["RetainedEarnings"] + net_income_t + d_current_assets_arrears
@@ -421,16 +431,17 @@ def run_scenario(base_row: pd.Series, params: dict, horizon_years: int) -> pd.Da
         state["Reserve"] += top_up - r_draw
         state["CurrentLiabilities"] = state["CurrentLiabilities"] + (f_short + wf_unpaid - repaid)
         state["TotalLiabilities"] = state["TotalLiabilities"] + (funding + wf_unpaid - repaid - d_equity_fx_reval)
-        state["CurrentAssets"] = state["CurrentAssets"] + (d_receivable + trapped_vat + d_current_assets_arrears) + d_cust
-        state["TotalAssets"] = state["TotalAssets"] + (d_receivable + trapped_vat + d_current_assets_arrears + left_over + top_up - r_draw) + d_cust
+        state["CurrentAssets"] = state["CurrentAssets"] + (d_receivable + trapped_vat + d_current_assets_arrears) + (d_cust - cust_charge)
+        state["TotalAssets"] = (state["TotalAssets"] + (d_receivable + trapped_vat + d_current_assets_arrears + left_over + top_up - r_draw)
+                                + (d_cust - cust_charge))
         if params.get("legacy_loss_assets") and need > 0:
             state["TotalAssets"] += min(0.0, net_income_t)       # original rule: a borrowed loss also cuts total assets
         if draw:                                                 # cash paid out leaves current and total assets
             state["Cash"] -= draw; state["CashDrawn"] += draw
             state["CurrentAssets"] -= draw; state["TotalAssets"] -= draw
-        if rebuilt:                                              # part of the surplus (already in total assets) held as cash
-            state["Cash"] += rebuilt; state["CashDrawn"] -= rebuilt
-            state["CurrentAssets"] += rebuilt
+        if left_over and not legacy:                             # the surplus left after repayments (already in total assets) is held as cash
+            state["Cash"] += left_over; state["CashDrawn"] -= rebuilt
+            state["CurrentAssets"] += left_over
         state["EBIT"] = ebit_t
         state["Interest"] = base_row["Interest Expense"] + d_interest + interest_open + interest_new - saving + interest_late
 
@@ -439,6 +450,7 @@ def run_scenario(base_row: pd.Series, params: dict, horizon_years: int) -> pd.Da
                  "interest_new": interest_open + interest_new, "ni": net_income_t, "support": support, "saving": saving,
                  "wf_unpaid": wf_unpaid, "u_ops": unpaid_t["ArrOps"] + unpaid_t["ArrFloor"], "r_draw": r_draw, "top_up": top_up,
                  "state_pay": state_pay, "late": interest_late, "alpha": alpha, "comp_gap": comp_gap, "d_cust": d_cust,
+                 "cust_charge": cust_charge,
                  "rma_share": _ratio(cust_rev + tariff_revenue + customer_share, state["Revenue"] + fuel_cost_increase) if grants_known else float("nan")}
         rows.append(_snapshot(base_row["Entity"], base_row.get("Sector", ""), int(base_row["Year"]) + t, t, state, flows))
 
@@ -590,7 +602,7 @@ def _snapshot(entity, sector, calendar_year, t, state, flows) -> dict:
         equity=state["Equity"],
         total_liabilities=state["TotalLiabilities"],
     )
-    illiquid = state["IlliquidOpen"] + state["Receivable"] + state["TrappedVAT"] + state["CustArrears"]   # customer arrears are slow to collect too
+    illiquid = state["IlliquidOpen"] + state["Receivable"] + state["TrappedVAT"] + (state["CustArrears"] - state["CustAllow"])  # customer arrears are slow to collect too
     f = lambda k: flows.get(k, 0.0)
     default = bool(state["DefaultRule"] and state["ArrDebt"] > 0)   # debt service unpaid: rated D
     return {
@@ -630,6 +642,7 @@ def _snapshot(entity, sector, calendar_year, t, state, flows) -> dict:
         "Waterfall Routed Share": f("alpha"),           # share of the year's cash routed through the waterfall
         "Tariff Gap Compensation Change": f("comp_gap"),  # change in State compensation from the cost-recovery ratio
         "Customer Arrears Change": f("d_cust"),
+        "Customer Arrears Provision": f("cust_charge"),  # loss on new unpaid bills, less recoveries of earlier provided bills
         "Reserve Draw": f("r_draw"),
         "Reserve Top-up": f("top_up"),
         "Emergency Support": f("support"),              # government injection above the borrowing cap
@@ -649,7 +662,8 @@ def _snapshot(entity, sector, calendar_year, t, state, flows) -> dict:
         "Arrears on O&M Floor": state["ArrFloor"],
         "Arrears to Junior Creditors": state["ArrJun"],
         "Arrears to Statutory and Operator": state["ArrStat"],
-        "Customer Arrears": state["CustArrears"],
+        "Customer Arrears": state["CustArrears"],          # what customers owe (gross)
+        "Customer Arrears Allowance": state["CustAllow"],  # of which treated as lost (not an asset)
         "Cumulative State Shortfall Payment": state["StateShortfall"],
         "Reserve Account": state["Reserve"],
         "Cumulative Emergency Support": state["Support"],

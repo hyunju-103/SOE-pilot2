@@ -193,6 +193,7 @@
         Refinanced: 0, Support: 0,
         ArrIPP: 0, ArrFuel: 0, ArrDebt: 0, ArrOps: 0, Reserve: 0, // cash waterfall: arrears by priority tier and the reserve account
         ArrStat: 0, ArrFloor: 0, ArrJun: 0, StateShortfall: 0, CustArrears: 0,
+        CustAllow: 0, // customer arrears: allowance for the part treated as lost (only CustArrears - CustAllow is an asset)
         // snapshot rules: a year with debt service unpaid is rated D; share of the State receivable in current assets
         DefaultRule: num(p.default_on_missed_debt, 0) > 0,
         RecvCurrent: Math.min(1, Math.max(0, num(p.receivable_current_share, 1))),
@@ -240,6 +241,7 @@
       const segW = seg.reduce((s, [w]) => s + Math.max(0, w), 0);
       const coll = segW > 0 ? seg.reduce((s, [w, c]) => s + Math.max(0, w) * clamp01(c), 0) / segW : 1;
       const custCollect = clamp01(num(p.customer_arrears_collected, 0.5));
+      const custProv = clamp01(num(p.customer_arrears_provision_share, 1));
       const growth = num(p.demand_growth, 0), losses = num(p.losses_change, 0);
       const rev0 = base[K.rev], opex0 = base[K.opex];
 
@@ -307,7 +309,11 @@
         const dRecv = unpaid - provision - collected;
         // customers' unpaid bills (collection rates by segment)
         const billed = custRev + tariff + cust;
-        const dCust = billed * (1 - coll) - st.CustArrears * custCollect;
+        const newCust = billed * (1 - coll);
+        const dCust = newCust - st.CustArrears * custCollect;  // change in what customers owe
+        // loss allowance: a share of the new unpaid bills is a loss when billed, and what is later collected of the
+        // provided part comes back as income (the allowance is released in step)
+        const custCharge = newCust * custProv - st.CustAllow * custCollect;
         // bills by tier (waterfall), and what priority creditors give back for their priority
         const opex = st.OpEx, fuelBase = p.fuel_cost_share * opex;
         const disc = wfOn ? disc0 * alpha : 0;
@@ -321,10 +327,10 @@
         // net income before interest on this year's new borrowing
         const ebit = base[K.ebit] + dFuel + dFx + dRev + dExtra;
         const intOpen = rate * (st.STDebt + st.LTDebt);
-        const ni0 = base[K.ni] + (dFuel + dFx + dRev) - dInt - provision - intOpen + saving + dExtra - intLate;
+        const ni0 = base[K.ni] + (dFuel + dFx + dRev) - dInt - provision - intOpen + saving + dExtra - intLate - custCharge;
 
         // cash the SOE has to find this year (negative = surplus)
-        const need0 = -ni0 + dRecv + vat + dCust;
+        const need0 = -ni0 + dRecv + vat + (dCust - custCharge); // the allowance is not cash
         let fund = 0, intNew = 0, repay = 0, left = 0, draw = 0, rebuilt = 0, support = 0;
         const un = Object.fromEntries(TIER_KEYS.map((k) => [k, 0]));
         let rDraw = 0, topUp = 0, statePay = 0, bills = null, target = 0;
@@ -390,14 +396,14 @@
           const rb = Math.min(s, st.STDebt); st.STDebt -= rb; s -= rb;
           const ra = Math.min(s, st.Payables); st.Payables -= ra; s -= ra;
           repay += rb + ra; left = s;
-          if (cashLive) rebuilt = Math.min(left, st.CashDrawn); // rebuilds the cash drawn in earlier years, no further
+          if (cashLive) rebuilt = Math.min(left, st.CashDrawn); // first rebuilds the cash drawn in earlier years
         }
         const wfUnpaid = TIER_KEYS.reduce((a, k) => a + un[k], 0);
         const ni = ni0 - intNew;
         const fST = fund * stShare, fAP = fST * apShare, fBank = fST - fAP, fLT = fund - fST;
 
         st.STDebt += fBank; st.Payables += fAP; st.LTDebt += fLT;
-        st.Recv += dRecv; st.VAT += vat; st.CustArrears += dCust;
+        st.Recv += dRecv; st.VAT += vat; st.CustArrears += dCust; st.CustAllow += custCharge;
         // the arrears write-down is a non-cash impairment of current assets: it hits equity and retained
         // earnings in the same year, but not EBIT, net income or the financing need
         st.RE += ni + dArr;
@@ -407,16 +413,16 @@
         st.Reserve += topUp - rDraw;
         st.CL += fST + wfUnpaid - repay;
         st.TL += fund + wfUnpaid - repay - dReval;
-        st.CA += dRecv + vat + dArr + dCust;
-        st.TA += dRecv + vat + dArr + left + topUp - rDraw + dCust;
+        st.CA += dRecv + vat + dArr + (dCust - custCharge);
+        st.TA += dRecv + vat + dArr + left + topUp - rDraw + (dCust - custCharge);
         if (p.legacy_loss_assets && need0 > 0) st.TA += Math.min(0, ni); // optional: old rule, a borrowed loss also cuts total assets
         if (draw) { st.Cash -= draw; st.CashDrawn += draw; st.CA -= draw; st.TA -= draw; } // cash paid out
-        if (rebuilt) { st.Cash += rebuilt; st.CashDrawn -= rebuilt; st.CA += rebuilt; }    // part of the surplus held as cash
+        if (left && !legacy) { st.Cash += left; st.CashDrawn -= rebuilt; st.CA += left; } // the surplus left after repayments is held as cash
         st.EBIT = ebit;
         st.Interest = base[K.int] + dInt + intOpen + intNew - saving + intLate;
         const rma = grantsKnown ? div(custRev + tariff + cust, st.Revenue + inc) : NaN; // customer share of the allowed revenue
         out.push(snap(base, t, st, { inc, tariff, cust, comp, paidNow, unpaid, collected, provision, vat, fund, draw, fST, intNew: intOpen + intNew, ni, support, saving, rma,
-          wfUnpaid, uOps: un.ArrOps + un.ArrFloor, rDraw, topUp, statePay, late: intLate, alpha, compGap, dCust }));
+          wfUnpaid, uOps: un.ArrOps + un.ArrFloor, rDraw, topUp, statePay, late: intLate, alpha, compGap, dCust, custCharge }));
       }
       return out;
     }
@@ -505,7 +511,7 @@
     function snap(base, t, st, f) {
       const ca = st.CA - (1 - st.RecvCurrent) * st.Recv;      // part of the State receivable may be non-current
       const z = zemFromValues(ca - st.CL, st.TA, st.RE, st.EBIT, st.Equity, st.TL);
-      const illiquid = st.IlliquidOpen + st.Recv + st.VAT + st.CustArrears; // customer arrears are slow to collect too
+      const illiquid = st.IlliquidOpen + st.Recv + st.VAT + (st.CustArrears - st.CustAllow); // customer arrears are slow to collect too
       const dflt = !!(st.DefaultRule && st.ArrDebt > 0);      // debt service unpaid: rated D
       return {
         Entity: base.Entity, Sector: base.Sector, "Calendar Year": base.Year + t, "Projection Year": t,
@@ -533,6 +539,7 @@
         "Waterfall Routed Share": f.alpha || 0,             // share of the year's cash routed through the waterfall
         "Tariff Gap Compensation Change": f.compGap || 0,   // change in State compensation from the cost-recovery ratio
         "Customer Arrears Change": f.dCust || 0,
+        "Customer Arrears Provision": f.custCharge || 0,    // loss on new unpaid bills, less recoveries of earlier provided bills
         "Reserve Draw": f.rDraw || 0,
         "Reserve Top-up": f.topUp || 0,
         "Emergency Support": f.support || 0,                // government injection above the borrowing cap
@@ -552,7 +559,8 @@
         "Arrears on O&M Floor": st.ArrFloor,
         "Arrears to Junior Creditors": st.ArrJun,
         "Arrears to Statutory and Operator": st.ArrStat,
-        "Customer Arrears": st.CustArrears,
+        "Customer Arrears": st.CustArrears,                 // what customers owe (gross)
+        "Customer Arrears Allowance": st.CustAllow,         // of which treated as lost (not an asset)
         "Cumulative State Shortfall Payment": st.StateShortfall,
         "Reserve Account": st.Reserve,
         "Cumulative Emergency Support": st.Support,

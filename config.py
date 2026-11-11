@@ -420,6 +420,8 @@ DEFAULT_CASH_SETTINGS = {
     "collect_households": 1.0, "collect_large_private": 1.0, "collect_public": 1.0,   # in-year collection rates by segment
     "share_households": 0.55, "share_large_private": 0.30, "share_public": 0.15,     # segment shares of customer revenue (placeholders)
     "customer_arrears_collected": 0.5,  # share of unpaid customer bills collected the next year
+    "customer_arrears_provision_share": 1.0,  # share of new unpaid customer bills treated as a loss when billed; what is
+                                        # later collected of it comes back as income (0 = keep them as a full-value current asset)
     "demand_growth": 0.0,               # yearly growth of sales and cash operating costs
     "losses_change": 0.0,               # change in network losses, share of billed sales lost at the same cost
     # probability of distress on the Shock Scenarios page
@@ -1131,6 +1133,10 @@ PARAMETER_REGISTER = [
        f"households {DEFAULT_CASH_SETTINGS['collect_households']:.0%}, large private {DEFAULT_CASH_SETTINGS['collect_large_private']:.0%}, public {DEFAULT_CASH_SETTINGS['collect_public']:.0%}; "
        f"shares {DEFAULT_CASH_SETTINGS['share_households']:.0%}/{DEFAULT_CASH_SETTINGS['share_large_private']:.0%}/{DEFAULT_CASH_SETTINGS['share_public']:.0%}", "placeholder",
        "Task team review: public administrations usually the weakest payer. Sales shares are placeholders; set from the SOE's billing data", "Shock Scenarios"),
+    _p("Tariffs and collections", "Unpaid customer bills treated as a loss", f"{DEFAULT_CASH_SETTINGS['customer_arrears_provision_share']:.0%}", "design",
+       "Conservative default so that lower collections cannot raise Z-EM: an unpaid bill is a loss (below EBIT, like the State compensation provision) "
+       "until collected, and later collections ('collected the next year') come back as income. 0% keeps unpaid bills as a full-value current asset, "
+       "which raised X1 when the gap was borrowed long-term", "Shock Scenarios"),
     _p("Tariffs and collections", "Demand growth and losses", "0% / 0%", "user",
        "Macro drivers in the task team review; demand growth scales sales and cash costs together, losses cut customer revenue at the same cost", "Shock Scenarios"),
     _p("Probability of distress", "PD method", f"{DEFAULT_CASH_SETTINGS['pd_method']}; logistic sensitivity a {DEFAULT_CASH_SETTINGS['pd_logit_a']}, b {DEFAULT_CASH_SETTINGS['pd_logit_b']}", "placeholder",

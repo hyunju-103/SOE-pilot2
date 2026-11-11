@@ -8,7 +8,9 @@ end-user tariff increase, trapped VAT).
 1. With the default cash settings and legacy_loss_assets=True, the engine
    reproduces the original formula exactly (reference copy below).
 2. With the defaults as shipped (legacy_loss_assets=False), it matches the
-   original formula until the first year with a loss.
+   original formula until the first year with a loss, except that the
+   surplus is held as cash: current assets exceed the original by the cash
+   built up since the base year.
 3. The balance sheet balances (TA = TL + Equity, apart from the arrears
    write-down channel, which has no offsetting entry by design).
 4. The cash arithmetic: unpaid compensation, funding gap with half-year
@@ -106,8 +108,9 @@ def main():
                     n += 2
                     if not close(ref[t][i], leg[c].iloc[t]):
                         fails.append(f"1 legacy {name} {r['Entity']} t={t} {c}: original={ref[t][i]} new={leg[c].iloc[t]}")
-                    if t < first_loss and not close(ref[t][i], new[c].iloc[t]):
-                        fails.append(f"2 default {name} {r['Entity']} t={t} {c}: original={ref[t][i]} new={new[c].iloc[t]}")
+                    held = new["Cash"].iloc[t] - new["Cash"].iloc[0] if c == "Current Assets" else 0.0  # surplus held as cash
+                    if t < first_loss and not close(ref[t][i] + held, new[c].iloc[t]):
+                        fails.append(f"2 default {name} {r['Entity']} t={t} {c}: original={ref[t][i]} (+ cash held {held}) new={new[c].iloc[t]}")
 
     # 3. identity, including the cash channel
     oil = dict(std, **config.DEFAULT_CASH_SETTINGS)
