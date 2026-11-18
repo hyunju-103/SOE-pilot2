@@ -83,7 +83,7 @@ def config_payload() -> dict:
         "ZEM_COEFFICIENTS", "ZEM_CONSTANT", "ZEM_LABELS", "ZEM_DESCRIPTORS", "ZEM_COMPONENT_STRONG_THRESHOLD",
         "SINGLE_DRIVER_SHARE_THRESHOLD", "ZONES", "Z_DISTRESS_CUTOFF", "Z_SAFE_CUTOFF", "Z_RATING_TABLE", "PD_BY_ZONE",
         "LGD_SLIDER_MIN", "LGD_SLIDER_MAX", "LGD_SLIDER_DEFAULT", "SECTOR_RECOVERY_DATA", "KPI_THRESHOLDS",
-        "KPI_CATEGORIES", "CATEGORY_LABELS", "CATEGORY_ORDER", "SECTOR_FUEL_COST_SHARE", "SECTOR_REVENUE_VOLATILITY",
+        "KPI_CATEGORIES", "CATEGORY_LABELS", "CATEGORY_ORDER", "CATEGORY_EXPLAIN", "KPI_HOW_TO_READ", "KPI_PLAIN", "SECTOR_FUEL_COST_SHARE", "SECTOR_REVENUE_VOLATILITY",
         "DEFAULT_SHOCK_PARAMS", "MC_DEFAULT_SIMULATIONS", "MC_DEFAULT_FUEL_STD", "MC_DEFAULT_FX_STD",
         "MC_DEFAULT_CORRELATION", "MC_HORIZON_YEARS", "DEFAULT_GDP_GROWTH", "REQUIRED_COLUMNS", "OPTIONAL_SHOCK_COLUMNS",
         "GLOSSARY", "RATING_SCALE_ASC", "SOVEREIGN_OUTLOOK_OPTIONS", "ROLE_LEVELS", "ROLE_SCORE", "ROLE_CRITERIA",
@@ -144,6 +144,16 @@ def _pack(recs: list) -> dict:
     return {"cols": cols, "data": [[r.get(c) for c in cols] for r in recs]}
 
 
+def _weo_gdp():
+    """The IMF WEO nominal-GDP table (assets/weo_gdp.json, made by scripts/fetch_weo_gdp.py), or None when the
+    file is missing: the page then looks GDP up at the World Bank, as before."""
+    path = Path(__file__).resolve().parent / "assets" / "weo_gdp.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def build_app_data(
     raw_df: pd.DataFrame,
     lgd_pct: float = config.LGD_SLIDER_DEFAULT,
@@ -173,7 +183,7 @@ def build_app_data(
         # 30 invented SOEs x 20 years, to see how long histories and large portfolios are drawn
         "long": dict(_pack(rows_payload(data_loader.long_panel_demo())), label=data_loader.LONG_PANEL_LABEL, example=True),
     }
-    return {"config": config_payload(), "data": {"meta": meta, "datasets": datasets}}
+    return {"config": config_payload(), "data": {"meta": meta, "datasets": datasets, "gdp": _weo_gdp()}}
 
 
 def _json_script(obj) -> str:

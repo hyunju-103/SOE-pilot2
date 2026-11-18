@@ -254,6 +254,25 @@ table.ctl-table select { font-size: 12.5px; padding: 3px 6px; max-width: 150px; 
 .mini .val { text-align: right; font-weight: 600; font-size: 12.5px; }
 .kpi-desc { font-size: 12px; color: var(--muted); margin: 8px 0 0; min-height: 3.2em; }
 
+/* KPI mini charts (KPI Dashboard default view; also embedded by the Simple view) */
+#kpi-explain { max-width: 90ch; margin-bottom: 16px; }
+#kpi-explain h3 { margin: 0 0 2px; font-size: 20px; color: var(--heading); }
+#kpi-explain p { margin: 6px 0 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+#kpi-explain p.kpi-question { font-size: 15px; font-weight: 600; color: var(--ink); }
+#kpi-explain p.kpi-how { font-size: 12.5px; color: var(--muted); }
+.kpi-question { font-weight: 600; }
+#kpi-minis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; margin-bottom: 14px; }
+@media (max-width: 1080px) { #kpi-minis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { #kpi-minis { grid-template-columns: minmax(0, 1fr); } }
+.kpi-mini { display: flex; flex-direction: column; gap: 6px; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px 14px; }
+.kpi-mini-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.kpi-mini-head h4 { margin: 0; font-size: 14px; color: var(--heading); }
+.kpi-mini-note { font-size: 11.5px; color: var(--muted); }
+.kpi-mini .chart { min-height: 150px; }
+.kpi-mini .kpi-mini-msg { min-height: 0; margin: 0; flex: 1; }
+p.kpi-plain { margin: auto 0 0; padding-top: 6px; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.kpi-csv { margin-top: 4px; }
+
 /* charts */
 .chart { width: 100%; position: relative; }
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; }

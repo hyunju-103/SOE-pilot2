@@ -314,6 +314,54 @@ CATEGORY_LABELS = {
 }
 CATEGORY_ORDER = ["profitability", "liquidity", "solvency", "fiscal_dependency"]
 
+# Plain-language text for the KPI Dashboard's default view and the Simple view, written for a reader
+# with no finance background. Text only: no ratio, cut-off or group membership is defined here.
+# CATEGORY_EXPLAIN: the question each group answers and why the budget should care.
+CATEGORY_EXPLAIN = {
+    "profitability": {
+        "question": "Does the company earn more than it spends?",
+        "text": "Profitability compares what the company earns with what it costs to run. A company that loses money year after year uses up its owners' stake and, for a State-owned company, sooner or later needs money from the budget. Look first at whether the lines sit above zero, then at whether they are rising or falling.",
+    },
+    "liquidity": {
+        "question": "Can the company pay this year's bills?",
+        "text": "Liquidity compares the cash and near-cash the company holds with the bills that fall due within a year. A company can be profitable on paper and still run out of cash. When it does, suppliers go unpaid, arrears build up, and the State is asked for urgent support.",
+    },
+    "solvency": {
+        "question": "Does the company owe more than it can carry?",
+        "text": "Solvency looks at how much the company owes, compared with what it owns and with what it earns. Heavy debt is the main route by which a State-owned company's troubles reach the budget: when the company cannot service its debt, the State often has to step in, with or without a formal guarantee. The group also holds two ratios on how hard the company's assets work.",
+    },
+    "fiscal_dependency": {
+        "question": "How much does the company already rely on the budget?",
+        "text": "These ratios show how much of the company's income and spending is covered by government grants, and how much tax it is charged. A company that lives on grants is already a cost to the budget, whatever its accounts say about profit. A rising line means that cost is growing.",
+    },
+}
+KPI_HOW_TO_READ = (
+    "Each chart follows one ratio over the years. The dashed lines are the tool's cut-offs: on the good side of the "
+    "\"good\" line the ratio is healthy, on the wrong side of the \"alert\" line it needs attention, and in between it is "
+    "on watch. The cut-offs are illustrative."
+)
+# KPI_PLAIN: one sentence per ratio, without accounting terms. The technical definition stays in
+# KPI_THRESHOLDS[key]["description"].
+KPI_PLAIN = {
+    "operating_margin": "Of every 100 the company earns, how much is left after its running costs, before interest and tax. Below zero, it loses money on its core business.",
+    "cost_recovery": "The company's own income, without government grants, compared with its running costs. Below 1, that income does not cover those costs.",
+    "net_margin": "Of every 100 the company earns, how much is left at the very end, after interest and tax.",
+    "ebitda_margin": "Of every 100 the company earns, how much is left after running costs, before wear and tear on equipment, interest and tax.",
+    "roa": "The year's profit compared with everything the company owns. It shows how much the assets earn.",
+    "roe": "The year's profit compared with the owners' stake in the company. Not shown when that stake is negative, because the ratio then misleads.",
+    "current_ratio": "What the company can turn into cash within a year, compared with the bills due within a year. Below 1, it cannot cover them.",
+    "working_capital_ratio": "What is left of the company's short-term funds after this year's bills, as a share of everything it owns. Below zero, the bills are larger than the funds.",
+    "debt_to_ebitda": "Roughly how many years of cash profit from operations it would take to repay everything the company owes. Lower is better. Not shown when that profit is negative.",
+    "liabilities_to_assets": "How much of what the company owns is financed by money it owes rather than by its owners. Lower is better.",
+    "interest_coverage": "How many times the profit from operations covers the year's interest bill. Below 1, the profit does not pay the interest.",
+    "debt_to_equity": "What the company owes compared with the owners' stake. Lower is better. Not shown when that stake is negative.",
+    "asset_turnover": "The revenue earned for each unit of assets. A low value means large assets that bring in little.",
+    "depreciation_to_ebitda": "The share of cash profit from operations that wear and tear on equipment uses up. Lower is better.",
+    "grants_to_revenue": "Government grants compared with the company's revenue. The higher it is, the more the company lives on the budget.",
+    "grants_to_expense": "The share of the company's spending that government grants pay for. Lower is better.",
+    "effective_tax_rate": "Tax charged compared with the profit from operations. Only meaningful when that profit is positive.",
+}
+
 # ---------------------------------------------------------------------------
 # Shock module defaults — sector fuel cost shares from SOE_shock_framework.pdf
 # (Section 4); remaining defaults are starting points pending calibration.

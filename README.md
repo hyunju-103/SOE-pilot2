@@ -505,9 +505,15 @@ keeps the balanced balance sheet but borrows every shortfall, which is the
 ## Simple view (November 2026)
 
 The HTML tool opens in a **Simple view** for country economists: load the accounts, pick one of eight
-scenarios, read the cost to the budget with its range, open one SOE for the reasons and the follow-up. It has
-no sliders. The tabs described above are unchanged and sit behind the **Analyst view** button in the header;
-`#view-<tab>` links open them directly. The Simple view lives in `templates/simple.js` and
-`templates/simple.css`, uses the same functions and settings as Home, Report and Early Warning, and is checked
-by `tests/check_simple_view.py` (needs Playwright). See `docs/CHANGES-simple-view.md` and
-`docs/DESIGN-simple-view.md`.
+scenarios, read the cost to the budget as a share of GDP, open one SOE for the reasons and the follow-up.
+Charts lead (the cost year by year, the distress score with its thresholds); it has no sliders and shows no
+local-currency amounts. The tabs described above sit behind the **Analyst view** button in the header;
+`#view-<tab>` links open them directly. The KPI Dashboard's default view shows one group of ratios at a time
+as small charts with a plain explanation.
+
+GDP comes from a saved IMF World Economic Outlook table, `assets/weo_gdp.json`, embedded in the page at build
+time. Refresh it after each WEO release with `python scripts/fetch_weo_gdp.py`, then rebuild the HTML.
+
+The Simple view lives in `templates/simple.js` and `templates/simple.css`, uses the same functions and
+settings as Home, Report and Early Warning, and is checked by `tests/check_simple_view.py` (needs Playwright)
+and `tests/check_gdp_table.py`. See `docs/CHANGES-simple-view.md` and `docs/DESIGN-simple-view.md`.

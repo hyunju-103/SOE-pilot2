@@ -592,7 +592,7 @@
     const firstName = S.names[0];
     const efcAll = latestOf(S.en).map((r) => [r.Entity, E.efcRow(r, M.lgd_pct).EFC]).sort((a, b) => (b[1] || 0) - (a[1] || 0));
     S.simple = { scen: "none", soe: null, all: false, range: {}, open: {} };
-    S.kpi = { view: "trend", from: yrs[0], to: lastY, soe: firstName, trend: {}, cmp: {}, period: "recent", year: lastY, avgFrom: yrs[0], avgTo: lastY, scCat: "headline", all: false };
+    S.kpi = { view: "trend", from: yrs[0], to: lastY, soe: firstName, group: CFG.CATEGORY_ORDER[0], trend: {}, cmp: {}, period: "recent", year: lastY, avgFrom: yrs[0], avgTo: lastY, scCat: "headline", all: false };
     S.alt = { view: "components", soe: firstName, from: yrs[0], to: lastY, period: "recent", year: lastY, avgFrom: yrs[0], avgTo: lastY, all: false };
     S.efc = { year: lastY, mode: "single", lgd: M.lgd_pct ?? CFG.LGD_SLIDER_DEFAULT, per: {}, sens: efcAll.length ? efcAll[0][0] : firstName, basis: "total_liabilities", ead: CFG.EAD_SHARE_DEFAULT, all: false };
     const shockSoe = firstName;
@@ -1207,25 +1207,76 @@
       el("span", { class: "lt" }, "n/a with a reason: the ratio is suppressed because equity, EBITDA or EBIT is negative, and counts as an alert.")], "");
     return { table: el("div", { class: "tbl-wrap" }, t), legend, scored };
   }
+  /** One small chart card for a ratio: label, status in words for the latest year, a line over the years with the
+   *  alert and good cut-offs, one plain sentence. hist = one SOE's enriched rows, oldest first.
+   *  kpiMini(hist, key, { na: true }) draws no chart (the data cannot give the ratio at all).
+   *  The chart is measured, so call root.draw() once the element is in the document (and again on resize). */
+  function kpiMini(hist, key, opt = {}) {
+    const sp = SPEC[key], root = el("div", { class: "kpi-mini", "data-kpi": key });
+    const vals = hist.map((r) => r[key]), xs = hist.map((r) => r.Year);
+    const na = !!opt.na || !vals.some(ok), lastRow = hist[hist.length - 1];
+    const head = el("div", { class: "kpi-mini-head" }, el("h4", {}, sp.label));
+    const chart = el("div", { class: "chart" });
+    const plain = el("p", { class: "kpi-plain" }, CFG.KPI_PLAIN[key] || sp.description);
+    root.draw = () => {};
+    if (na) {
+      root.setAttribute("data-na", "1");
+      head.appendChild(stChip("none", "No data"));
+      root.append(head, el("p", { class: "kpi-desc kpi-mini-msg" }, missingKpiMessage(key)), plain);
+      return root;
+    }
+    const s0 = lastRow ? kpiStatus(lastRow, key) : { st: null };
+    let note = null;
+    if (!lastRow || (!ok(lastRow[key]) && s0.why)) { head.appendChild(stChip("none", "Not shown")); note = s0.why ? `${lastRow.Year}: ${s0.why}` : null; }
+    else if (!ok(lastRow[key])) { head.appendChild(stChip("none", "Not shown")); note = `${lastRow.Year}: not reported`; }
+    else if (s0.st) head.appendChild(stChip(s0.st));
+    else head.appendChild(stChip("none", "No data"));
+    root.append(head, ...(note ? [el("div", { class: "kpi-mini-note" }, note)] : []), chart, plain);
+    root.draw = () => {
+      const ent = lastRow ? lastRow.Entity : "";
+      lines(chart, xs, [{ vals, cls: "ln", dot: "hl", lastDot: "now", label: sp.label }], {
+        h: 150, L: 40, R: 38, yFmt: kpiTick(key),
+        hlines: [{ y: sp.red_cut, cls: "thr-crit", label: "alert", include: true }, { y: sp.green_cut, cls: "thr-good", label: "good", include: true }],
+        tipTitle: (i) => `${ent} · ${xs[i]}`,
+        tip: (i) => {
+          if (!ok(vals[i])) { const why = kpiStatus(hist[i], key).why; return [["n/a", why ? `not shown: ${why}` : "not reported"]]; }
+          const s2 = RAG[E.classify(vals[i], key)[0]];
+          return [[kpiFmt(key, vals[i]), sp.label], [STLABEL[s2] || "—", cutText(key)]];
+        },
+        naMarks: true,
+      });
+      // when the two cut-offs sit close together their labels would overlap: push them apart
+      const tl = [...chart.querySelectorAll("svg text")].filter((t) => t.textContent === "alert" || t.textContent === "good").sort((a, b) => +a.getAttribute("y") - +b.getAttribute("y"));
+      if (tl.length === 2) {
+        const y0 = +tl[0].getAttribute("y"), y1 = +tl[1].getAttribute("y"), gap = y1 - y0;
+        if (gap < 12) { tl[0].setAttribute("y", y0 - (12 - gap) / 2); tl[1].setAttribute("y", y1 + (12 - gap) / 2); }
+      }
+    };
+    return root;
+  }
   pages.kpi = {
     build(root) {
       const st = S.kpi, H = (this.H = {});
       if (!S.years.includes(st.from)) st.from = S.years[0];
       if (!S.years.includes(st.to)) st.to = last(S.years);
-      const rowsK = () => F().filter((r) => r.Year >= st.from && r.Year <= st.to);
+      const rowsK = () => (st.view === "trend" ? F() : F().filter((r) => r.Year >= st.from && r.Year <= st.to));
       this.rowsK = rowsK;
       const avail = E.availableKpis(rowsK());
       this.avail = avail;
       const tools = el("div", { class: "row-ctl" },
-        el("div", { class: "fld" }, el("span", { class: "lbl" }, "View"), seg([["trend", "Trend for one SOE"], ["compare", "Compare across SOEs"], ["scorecard", "Full scorecard"]], st.view, (v) => { st.view = v; rebuild(); })),
-        S.years.length > 1 ? yearRangeCtl(S.years, st.from, st.to, (f, t) => { st.from = f; st.to = t; rebuild(); }) : null);
-      const head = pageHead("PERFORMANCE MONITORING", "KPI Dashboard", "Profitability, liquidity, solvency, and fiscal-dependency ratios. Pick a ratio from each column's dropdown — thresholds are illustrative, pending recalibration.");
+        el("div", { class: "fld" }, el("span", { class: "lbl" }, "View"), seg([["trend", "One SOE"], ["compare", "Compare across SOEs"], ["scorecard", "Full scorecard"]], st.view, (v) => {
+          st.view = v;
+          if (v === "trend") { st.from = S.years[0]; st.to = last(S.years); } // the one-SOE view draws every year
+          rebuild();
+        })),
+        st.view !== "trend" && S.years.length > 1 ? yearRangeCtl(S.years, st.from, st.to, (f, t) => { st.from = f; st.to = t; rebuild(); }) : null);
+      const head = pageHead("PERFORMANCE MONITORING", "KPI Dashboard", "Profitability, liquidity, solvency and fiscal-dependency ratios, one group at a time. Pick an SOE and a group. Thresholds are illustrative, pending recalibration.");
       const foot = el("div", { class: "foot" },
         el("div", {}, el("b", {}, "Thresholds. "), "Illustrative IMF SOE Health Check Tool-style red/amber/green cuts — provisional starting points, not calibrated to a specific country sample."),
         el("div", {}, el("b", {}, "Suppressed ratios. "), "ROE, Debt/Equity, Debt/EBITDA, Depreciation/EBITDA and the effective tax rate show n/a when equity, EBITDA or EBIT is negative — the ratio's sign flips and would otherwise read as good. The scorecard counts these as alerts, as the guidance note recommends."));
       H.out = el("div");
-      H.strip = statStrip();
-      root.replaceChildren(head, H.strip, el("div", { class: "card", style: "margin-bottom:16px" }, tools), H.out, foot);
+      H.strip = st.view === "compare" ? statStrip() : null;
+      root.replaceChildren(head, ...(H.strip ? [H.strip] : []), el("div", { class: "card", style: "margin-bottom:16px" }, tools), H.out, foot);
       // Keep all views selectable even if none of their KPI source columns exists.
       // Computable KPIs (this.avail) are still used solely for portfolio statistics.
       if (st.view === "trend") this.buildTrend();
@@ -1238,22 +1289,30 @@
     // Keep this.avail for computing valid portfolio statistics only.
     catKpis(cat) { return CFG.KPI_CATEGORIES[cat].slice(); },
     buildTrend() {
-      const st = S.kpi, H = this.H, names = uniq(this.rowsK().map((r) => r.Entity)).sort();
+      const st = S.kpi, H = this.H, names = uniq(F().map((r) => r.Entity)).sort();
       if (!names.includes(st.soe)) st.soe = names[0];
-      H.cards = {};
-      const grid = el("div", { class: "grid4" });
-      CFG.CATEGORY_ORDER.forEach((cat) => {
-        const ks = this.catKpis(cat), c = card(CFG.CATEGORY_LABELS[cat], null, null, "top");
-        if (!ks.length) { c.body.appendChild(el("p", { class: "kpi-desc" }, "No ratios available in this category for the current data.")); grid.appendChild(c.root); return; }
-        if (!ks.includes(st.trend[cat])) st.trend[cat] = ks.find((k) => this.avail.includes(k)) || ks[0];
-        const chart = el("div", { class: "chart" }), desc = el("p", { class: "kpi-desc" }), btn = el("div");
-        c.body.append(fSelect("Ratio", ks.map((k) => [k, kpiTitle(k)]), st.trend[cat], (v) => { st.trend[cat] = v; this.render(); }), chart, desc, btn);
-        H.cards[cat] = { chart, desc, btn };
-        grid.appendChild(c.root);
-      });
-      H.out.replaceChildren(el("div", { class: "row-ctl", style: "margin-bottom:12px" }, fSelect("SOE", names, st.soe, (v) => { st.soe = v; this.render(); })), grid,
-        legendRow([legendItem(LG.now, "Latest year"), legendItem(LG.hl, "Earlier years"), legendItem(LG.thrC, "Alert cutoff"), legendItem(LG.thrG, "Good cutoff"),
-          el("span", { class: "lt" }, "Same chart for any number of years; with more than 15 years only the latest point is marked. A gap means the ratio is n/a that year.")], ""));
+      if (!CFG.CATEGORY_ORDER.includes(st.group)) st.group = CFG.CATEGORY_ORDER[0];
+      H.explain = el("div", { id: "kpi-explain" });
+      H.minisBox = el("div", { id: "kpi-minis" });
+      H.btn = el("div", { class: "kpi-csv" });
+      H.minis = [];
+      const fill = () => { this.fillTrend(); this.render(); };
+      H.out.replaceChildren(
+        el("div", { class: "row-ctl", style: "margin-bottom:14px" },
+          fSelect("SOE", names, st.soe, (v) => { st.soe = v; fill(); }, { id: "kpi-soe" }),
+          fSelect("Group", CFG.CATEGORY_ORDER.map((c) => [c, CFG.CATEGORY_LABELS[c]]), st.group, (v) => { st.group = v; fill(); }, { id: "kpi-group" })),
+        H.explain, H.minisBox, H.btn);
+      this.fillTrend();
+    },
+    /** explanation, one mini chart per ratio of the group, and the group's CSV for the selected SOE */
+    fillTrend() {
+      const st = S.kpi, H = this.H, g = st.group, ex = CFG.CATEGORY_EXPLAIN[g] || {};
+      const hist = F().filter((r) => r.Entity === st.soe).sort((a, b) => a.Year - b.Year);
+      const keys = this.catKpis(g), have = E.availableKpis(F(), g);
+      H.explain.replaceChildren(el("h3", {}, CFG.CATEGORY_LABELS[g]), el("p", { class: "kpi-question" }, ex.question || ""), el("p", {}, ex.text || ""), el("p", { class: "kpi-how" }, CFG.KPI_HOW_TO_READ));
+      H.minis = keys.map((k) => kpiMini(hist, k, have.includes(k) ? {} : { na: true }));
+      H.minisBox.replaceChildren(...H.minis);
+      H.btn.replaceChildren(dataButtons(() => toCSV(["Entity", "Sector", "Year", ...keys], hist.map((r) => [r.Entity, r.Sector, r.Year, ...keys.map((k) => (ok(r[k]) ? r[k] : ""))])), `${st.soe}_${g}.csv`));
     },
     buildCompare() {
       const st = S.kpi, H = this.H;
@@ -1283,6 +1342,7 @@
       H.out.replaceChildren(c.root);
     },
     renderStrip() {
+      if (!this.H.strip) return;
       const av = this.avail, latest = latestOf(this.rowsK()), n = latest.length;
       const many = av.length ? latest.filter((r) => av.filter((k) => kpiStatus(r, k).st === "alert").length >= Math.ceil(av.length / 2)).length : null;
       const medTile = (k, label) => {
@@ -1303,30 +1363,7 @@
       const st = S.kpi, H = this.H;
       this.renderStrip();
       if (st.view === "trend") {
-        const d = this.rowsK().filter((r) => r.Entity === st.soe).sort((a, b) => a.Year - b.Year);
-        for (const cat in H.cards) {
-          const k = st.trend[cat], { chart, desc, btn } = H.cards[cat];
-          const sp = SPEC[k], xs = d.map((r) => r.Year), vals = d.map((r) => r[k]);
-          desc.textContent = sp.description;
-          if (!vals.some(ok)) {
-            chart.replaceChildren(el("p", { class: "kpi-desc" }, missingKpiMessage(k))); btn.replaceChildren(); continue;
-          }
-          if (d.length < 2) { chart.replaceChildren(el("p", { class: "kpi-desc" }, `Only one year of data for ${st.soe} — need at least two to plot a trend.`)); btn.replaceChildren(); continue; }
-          // one chart for any number of years: every year in the range on the x-axis (gaps where the ratio is n/a),
-          // the latest year highlighted and labelled, dashed lines at the alert and good cutoffs
-          lines(chart, xs, [{ vals, cls: "ln", dot: "hl", lastDot: "now", label: sp.label }], {
-            h: 200, L: 46, R: 58, yFmt: kpiTick(k),
-            hlines: [{ y: sp.red_cut, cls: "thr-crit", include: true }, { y: sp.green_cut, cls: "thr-good", include: true }],
-            tipTitle: (i) => `${st.soe} · ${xs[i]}`,
-            tip: (i) => {
-              if (!ok(vals[i])) { const why = kpiStatus(d[i], k).why; return [["n/a", why ? `suppressed: ${why}` : "not reported"]]; }
-              const s2 = RAG[E.classify(vals[i], k)[0]];
-              return [[kpiFmt(k, vals[i]), sp.label], [STLABEL[s2] || "—", cutText(k)]];
-            },
-            endLabel: { series: 0, fmt: (v) => kpiFmt(k, v) }, naMarks: true,
-          });
-          btn.replaceChildren(dataButtons(() => toCSV(["Entity", "Sector", "Year", k], d.map((r) => [r.Entity, r.Sector, r.Year, r[k]])), `${st.soe}_${k}_trend.csv`));
-        }
+        (H.minis || []).forEach((m) => m.draw());
       } else if (st.view === "compare") {
         const keys = CFG.CATEGORY_ORDER.flatMap((cat) => this.catKpis(cat));
         const base = periodRows(this.rowsK(), st, keys);
@@ -1562,10 +1599,33 @@
     return hit ? hit[0] : "";
   }
   const gdpKey = (series, country, year) => `${series}|${country}|${year}`;
+  /** GDP from the IMF World Economic Outlook table in the page (DATA.gdp, assets/weo_gdp.json), in full currency units:
+      the year asked for, else the nearest earlier year the table has; { value, year } or null (also when the page has no table) */
+  function gdpTable(series, country, year) {
+    const t = DATA.gdp && DATA.gdp[series] && DATA.gdp[series][country], y = Number(year);
+    if (!t || !Number.isFinite(y)) return null;
+    const ys = Object.keys(t).map(Number).filter((k) => k <= y && t[k] > 0);
+    if (!ys.length) return null;
+    const best = Math.max(...ys);
+    return { value: t[best], year: String(best) };
+  }
+  /** true when the table has this very year, so the figure needs no request */
+  const gdpExact = (series, country, year) => { const t = gdpTable(series, country, year); return !!t && t.year === String(year); };
+  /** where an applied GDP came from, for the labels */
+  const gdpSourceName = (src) => src && src.kind === "weo" && DATA.gdp ? "IMF World Economic Outlook, " + DATA.gdp.vintage : "World Bank";
+  /** the one country whose currency the statements are in (ISO3), or "" when it is ambiguous (CFA, USD, EUR, ...) or not stated */
+  function countryFromCurrency() {
+    const c = stmtCurrency();
+    if (!c || !/^[A-Z]{3}$/.test(c)) return "";
+    const hits = GDP_COUNTRIES.filter((x) => x[2] === c);
+    return hits.length === 1 ? hits[0][0] : "";
+  }
   /** one World Bank GDP figure (year as a string) in full currency units, or null when it has none; cached in
       GDP_CACHE; rejects when the API cannot be reached. Used by the GDP field below and by the Simple view. */
   async function gdpFetch(series, country, year) {
     const key = gdpKey(series, country, year);
+    const tab = gdpTable(series, country, year);
+    if (tab && tab.year === String(year)) return tab.value; // from the saved IMF table: no request
     if (GDP_CACHE.has(key)) return GDP_CACHE.get(key);
     const url = `https://api.worldbank.org/v2/country/${encodeURIComponent(country)}/indicator/${GDP_SERIES[series].code}?date=${encodeURIComponent(year)}&format=json&source=2`;
     const response = await fetch(url, { headers: { Accept: "application/json" } });
@@ -1582,9 +1642,9 @@
     const anaYear = Number((S.tab === "efc" ? S.efc?.year : S.sh?.year) || last(S.years));
     const box = el("div", { class: "fld gdp-control" });
     const label = el("span", { class: "lbl" }, `Country GDP${CUR ? " (" + CUR + ")" : ""}`,
-      info("Nominal GDP, to show expected fiscal cost as a share of the economy. Pick a country and a year and the World Bank figure is filled in. Choose the series in the statements' currency: Local currency (GDP, current LCU) or US dollars (GDP, current US$). The units list only changes how the number is shown and typed. You can also type a value."));
+      info("Nominal GDP, to show expected fiscal cost as a share of the economy. Pick a country and a year and the figure is filled in (IMF World Economic Outlook, else World Bank). Choose the series in the statements' currency: Local currency (GDP, current LCU) or US dollars (GDP, current US$). The units list only changes how the number is shown and typed. You can also type a value."));
     if (!S.gdpSeries) S.gdpSeries = stmtCurrency() === "USD" ? "CD" : "CN";
-    const seriesSeg = seg([["CN", "Local currency"], ["CD", "US dollars"]], S.gdpSeries, (v) => { S.gdpSeries = v; renderSource(); lookup(); }, "World Bank GDP series");
+    const seriesSeg = seg([["CN", "Local currency"], ["CD", "US dollars"]], S.gdpSeries, (v) => { S.gdpSeries = v; renderSource(); lookup(); }, "GDP series");
     seriesSeg.classList.add("gdp-series");
     const countrySel = el("select", { id: countryId }, el("option", { value: "" }, "Select a country…"),
       ...GDP_COUNTRIES.slice().sort((a, b) => a[1].localeCompare(b[1])).map(([c, n]) => el("option", { value: c }, n)));
@@ -1601,7 +1661,7 @@
     const anywayBox = anyway.querySelector("input");
     const source = el("div", { class: "gdp-source" });
     box.append(label,
-      el("div", { class: "gdp-step" }, el("span", { class: "gdp-sub" }, "World Bank series"), seriesSeg),
+      el("div", { class: "gdp-step" }, el("span", { class: "gdp-sub" }, "GDP series"), seriesSeg),
       el("div", { class: "gdp-lookup-grid" }, el("label", { for: countryId }, "Country", countrySel), el("label", { for: yearId }, "Year", yearSel)),
       el("div", { class: "gdp-step" }, el("label", { for: valId, class: "gdp-sub" }, "GDP"), el("div", { class: "gdp-value" }, valInp, unitSel)),
       status, anyway, source);
@@ -1621,7 +1681,8 @@
       valInp.classList.toggle("held", !!pending && !S.gdp);
     }
     function renderSource() {
-      const s = GDP_SERIES[S.gdpSeries];
+      const s = GDP_SERIES[S.gdpSeries], weo = S.gdpSrc ? S.gdpSrc.kind === "weo" : gdpExact(S.gdpSeries, countrySel.value, yearSel.value);
+      if (weo) { source.replaceChildren("Source: ", el("a", { href: "https://www.imf.org/en/Publications/WEO", target: "_blank", rel: "noopener noreferrer" }, gdpSourceName({ kind: "weo" })), " · " + (S.gdpSeries === "CD" ? "NGDPD" : "NGDP")); return; }
       source.replaceChildren("Source: World Bank WDI · ", el("a", { href: "https://data.worldbank.org/indicator/" + s.code, target: "_blank", rel: "noopener noreferrer" }, s.name), " · " + s.code);
     }
     function renderStatus(msg) {
@@ -1635,11 +1696,11 @@
           (pending.series === "CD" ? "Switch the series to Local currency, type" : "Type") + ` a GDP in ${CUR}, or tick below.`);
         return;
       }
-      if (src && src.kind === "wb") {
+      if (src && (src.kind === "wb" || src.kind === "weo")) {
         const stat = gdpCurrencyStatus(src.cur), yearOff = anaYear && Number(src.year) !== anaYear;
         cls(src.forced || yearOff ? "warn" : "ok");
         const useYear = yearOff ? el("button", { type: "button", class: "linkbtn", onclick: () => { yearSel.value = String(anaYear); S.gdpYear = yearSel.value; lookup(); } }, `Use ${anaYear}`) : null;
-        put(status, el("b", {}, "✓ Filled in automatically: "), `${countryName(src.country)}, ${src.year} · ${gdpBig(src.value)} ${src.cur}. `,
+        put(status, el("b", {}, "✓ Filled in automatically: "), `${countryName(src.country)}, ${src.year} · ${gdpBig(src.value)} ${src.cur} (${gdpSourceName(src)}). `,
           src.forced ? `Different currency from the statements (${CUR}); results mix currencies.` : stat === "match" ? `Same currency as the statements (${CUR}).` : `The statements don't say their currency; check it is ${gdpCurName(src.cur)}.`,
           yearOff ? el("span", { class: "gdp-yr" }, ` GDP year ${src.year}, analysis year ${anaYear}. `, useYear) : null);
         return;
@@ -1653,18 +1714,20 @@
     function apply(res) {
       S.gdp = res.value / SC; S.gdpSrc = res; pending = null;
       S.gdpCountry = res.country; S.gdpYear = res.year; S.gdpSeries = res.series; // one GDP for every tab
-      showValue(); renderStatus(); onChange();
+      renderSource(); showValue(); renderStatus(); onChange();
     }
+    const lookedKind = (k) => k === "wb" || k === "weo";
     function clearLooked() {
-      if (S.gdpSrc && S.gdpSrc.kind === "wb") { S.gdp = null; S.gdpSrc = null; onChange(); }
+      if (S.gdpSrc && lookedKind(S.gdpSrc.kind)) { S.gdp = null; S.gdpSrc = null; onChange(); }
     }
     async function lookup() {
       const country = countrySel.value, year = yearSel.value, series = S.gdpSeries, req = ++fetchId;
       pending = null;
+      renderSource();
       if (!country || !year) { showValue(); renderStatus(); return; }
       const key = gdpKey(series, country, year);
-      if (S.gdpSrc && S.gdpSrc.kind === "wb" && gdpKey(S.gdpSrc.series, S.gdpSrc.country, S.gdpSrc.year) === key) { showValue(); renderStatus(); return; }
-      let value = GDP_CACHE.get(key);
+      if (S.gdpSrc && lookedKind(S.gdpSrc.kind) && gdpKey(S.gdpSrc.series, S.gdpSrc.country, S.gdpSrc.year) === key) { showValue(); renderStatus(); return; }
+      let value = gdpExact(series, country, year) ? gdpTable(series, country, year).value : GDP_CACHE.get(key); // the saved table needs no wait
       if (value === undefined) {
         renderStatus(["busy", `Looking up ${countryName(country)} GDP for ${year}…`]);
         try {
@@ -1682,7 +1745,7 @@
         renderStatus(["warn", `The World Bank has no ${GDP_SERIES[series].name} for ${countryName(country)} in ${year}. Choose another year, or type a value.`]);
         return;
       }
-      const res = { kind: "wb", series, country, year, value, cur: series === "CD" ? "USD" : countryCur(country) };
+      const res = { kind: gdpExact(series, country, year) ? "weo" : "wb", series, country, year, value, cur: series === "CD" ? "USD" : countryCur(country) };
       if (gdpCurrencyStatus(res.cur) === "mismatch") { pending = res; clearLooked(); showValue(); renderStatus(); return; }
       apply(res);
     }
